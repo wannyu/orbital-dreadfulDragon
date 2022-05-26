@@ -16,3 +16,6 @@ def start(update: Update, context: CallbackContext):
 /consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list.
 /list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.
 ")
+
+        
+        #new comment
