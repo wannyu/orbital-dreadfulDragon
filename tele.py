@@ -11,6 +11,8 @@ updater = Updater("5340307669:AAHcHNj6Ir58_AfUdJVDRV-aJdPk0noOL04", use_context=
 def start(update: Update, context: CallbackContext):
     update.message.reply_text("welcome")
 
+def add():
+    
 def unknown(update: Update, context: CallbackContext):
     update.message.reply_text(
         "Sorry '%s' is not a valid command" % update.message.text)
@@ -20,6 +22,7 @@ def unknown_text(update: Update, context: CallbackContext):
         "Sorry I can't recognize you , you said '%s'" % update.message.text)
   
 updater.dispatcher.add_handler(CommandHandler('start', start))
+updater.dispatcher.add_handler(CommandHandler('add', add))
 updater.dispatcher.add_handler(MessageHandler(Filters.text, unknown))
 updater.dispatcher.add_handler(MessageHandler(
     Filters.command, unknown))  
