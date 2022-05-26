@@ -27,4 +27,5 @@ updater.dispatcher.add_handler(MessageHandler(
 updater.dispatcher.add_handler(MessageHandler(Filters.text, unknown_text))
   
 updater.start_polling()                
-        #new comment
+        
+#python3 tele.py
