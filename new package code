@@ -25,7 +25,7 @@ conn.commit()
 
 import random
 import telebot
-bot = telebot.TeleBot("5340307669:AAG58mieQ4cFFhsIwZ-ov67xZpu7p8ejoHQ", parse_mode=None) 
+bot = telebot.TeleBot("TOKEN", parse_mode=None) 
 
 import threading
 import datetime as dt
