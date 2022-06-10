@@ -1,0 +1,134 @@
+!pip install pyTelegramBotAPI
+
+import sqlite3
+conn = sqlite3.connect('foodSaver.db', check_same_thread=False)
+
+conn.execute('''
+CREATE TABLE User (
+    userID,
+    household,
+    points
+);''')
+
+conn.commit()
+
+conn.execute('''
+CREATE TABLE Food (
+    foodID,
+    foodName,
+    servings,
+    expiryDate DATE,
+    userID
+);''')
+
+conn.commit()
+
+import random
+import telebot
+bot = telebot.TeleBot("TOKEN", parse_mode=None) 
+
+@bot.message_handler(commands=['help'])
+def help(message):
+    bot.send_message(message.chat.id,"Here are some commands to use the features I provide. \n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date. I’ll help to keep track of it and remind you to consume it before it expires! \n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list.\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    reply = bot.send_message(message.chat.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
+    bot.register_next_step_handler(reply, nhousehold)
+    
+def nhousehold(message):
+    #add chatid to database
+    userID = message.chat.id
+    household_size = int(message.text)
+    query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
+    conn.execute(query)
+    if int(message.text) <= 0:
+        bot.send_message(message.chat.id, "Please enter a valid number. Reply /start to start again.")
+    elif int(message.text) == 1:
+        bot.send_message(message.chat.id, f"There is {message.text} person in your household.")
+    else:
+        bot.send_message(message.chat.id, f"There are {message.text} people in your household.")
+
+@bot.message_handler(commands=['add'])
+def add(message):
+    reply = bot.send_message(message.chat.id, 'Please state the food name, servings and expiry date.')
+    bot.register_next_step_handler(reply, add_sql)
+   
+def add_sql(message):
+    terms = message.text.split(" ")
+    userID = message.chat.id
+    food_name = (terms[0]).lower() #convert all to lower case
+    servings = terms[1]
+    expiry_date = terms[2]
+    foodID = random.randint(1000, 9999)
+    while foodID in conn.execute('SELECT foodID FROM Food'):
+        foodID =  random.randint(1000, 9999)
+    # INSERT SQL code to add this into our database
+    values = (foodID, food_name, servings, expiry_date, userID)
+    add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
+    conn.execute(add_query, values)
+    reply = f"This is added to your food stock: \n"
+    if servings == "1":
+        reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+    else:
+        reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+    bot.send_message(message.chat.id, reply)
+
+@bot.message_handler(commands=['list'])
+def list(message):
+    values = [message.chat.id]
+    query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
+    cursor = conn.execute(query, values)
+    reply = "This is the current food stock you have: \n"
+    for row in cursor:
+      food_name = row[1]
+      servings = row[2]
+      expiry_date = row[3]
+      if servings == "1":
+        reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+      else:
+        reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+    bot.send_message(message.chat.id, reply)
+
+@bot.message_handler(commands=['consume'])
+def consume(message):
+    reply = bot.send_message(message.chat.id, 'Please state the food name and servings consumed.')
+    bot.register_next_step_handler(reply, consume_sql)
+
+def consume_sql(message):
+    terms = message.text.split(" ")
+    userID = message.chat.id
+    food_name = (terms[0]).lower() #convert all to lower case
+    servings_consumed = terms[1]
+
+    #update SQL 
+    values = [food_name, userID] 
+    query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
+    food = tuple(conn.execute(query, values))
+    if len(food) == 1:
+      #update the servings of the only row
+      earliest_foodID = food[0][0]
+    else:
+      #choose the one with earlier expiry date
+      data = [food_name, userID] 
+      earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
+      earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
+      earliest_foodID = earliest_expiry[0][0]
+      conn.commit()
+    
+    servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
+
+    servings_left = int(servings) - int(servings_consumed)
+    if servings_left == 0:
+      #delete
+      conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
+      conn.commit()
+    else:
+      #update
+      conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+      conn.commit()
+
+    reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
+    bot.send_message(message.chat.id, reply)
+
+bot.infinity_polling()
