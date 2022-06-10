@@ -42,12 +42,14 @@ def nhousehold(message):
     household_size = int(message.text)
     query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
     conn.execute(query)
-    if int(message.text) <= 0:
-        bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
-    elif int(message.text) == 1:
+
+    if int(message.text) == 1:
         bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
-    else:
+    elif int(message.text) > 1:
         bot.send_message(message.from_user.id, f"There are {message.text} people in your household.")
+    else:
+      bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
+
 
 @bot.message_handler(commands=['add'])
 def add(message):
