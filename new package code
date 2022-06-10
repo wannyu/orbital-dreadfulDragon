@@ -56,8 +56,9 @@ def nhousehold(message):
         bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
     else:
         household_size = int(message.text)
-        query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
-        conn.execute(query)
+        values = (userID, household_size, 0)
+        query = "INSERT INTO User VALUES(?, ?, ?);"
+        conn.execute(query, values)
     
         if household_size == 1:
             bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
@@ -104,7 +105,18 @@ def list(message):
         reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
       else:
         reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+
+
+    #debugging to check household members in database from here
+    hh_member_query = "SELECT * FROM User WHERE userID = ?"
+    num_hh_members_result = tuple(conn.execute(hh_member_query, [message.from_user.id]))
+    
+    reply += f"hh mem: {num_hh_members_result[0]}"
+
     bot.send_message(message.from_user.id, reply)
+    #till here
+
+
 
 @bot.message_handler(commands=['consume'])
 def consume(message):
@@ -172,5 +184,38 @@ def send_reminder():
 t = threading.Thread(target=send_reminder)
 t.start()
 
-bot.polling(none_stop=True, interval=0)
 
+def send_purchase_limit_message():
+    global ids 
+    while True:
+        for id in ids:
+            # counter to keep track of total servings a user has and the latest expiry date
+            num_of_days = 0
+            tot_num_of_servings = 0
+
+            data = [id]
+            food_query = "SELECT * FROM Food WHERE userID = ?"
+            result = tuple(conn.execute(food_query, data))
+            
+            today = date.today()
+            for i in result:
+                expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
+                days_left = (expiry_date - today).days
+                num_servings = int(i[2])
+
+                num_of_days = max(num_of_days, days_left)
+                tot_num_of_servings += num_servings
+
+            hh_member_query = "SELECT household FROM User WHERE userID = ?"
+            num_hh_members_result = conn.execute(hh_member_query, data)
+            
+            print(tot_num_of_servings / num_of_days)
+            if tot_num_of_servings / num_of_days > 12 * int(num_hh_members_result[0][1]):
+                bot.send_message(id, "Oops! It seems that you might have bought too much food to be consumed by your household before they expire! Do think twice before buying more food!")
+        sleep(10)
+
+ttt = threading.Thread(target=send_purchase_limit_message)
+ttt.start()
+
+
+bot.polling(none_stop=True, interval=0)
