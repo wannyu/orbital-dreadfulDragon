@@ -27,12 +27,22 @@ import random
 import telebot
 bot = telebot.TeleBot("5340307669:AAG58mieQ4cFFhsIwZ-ov67xZpu7p8ejoHQ", parse_mode=None) 
 
+import threading
+import datetime as dt
+from datetime import date
+from time import sleep
+delay = 86400 #checks every day (24h)
+ids = []
+
 @bot.message_handler(commands=['help'])
 def help(message):
     bot.send_message(message.from_user.id,"Here are some commands to use the features I provide. \n\n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date. I’ll help to keep track of it and remind you to consume it before it expires! \nIf you are unsure of servings portions, visit this link: https://www.healthhub.sg/live-healthy/2044/know-your-servings-photo-guide \n\n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list. \n\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    #for reminder
+    global ids
+    ids.append(message.from_user.id)
     reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
     
@@ -137,5 +147,31 @@ def consume_sql(message):
     reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
     bot.send_message(message.from_user.id, reply)
 
-bot.infinity_polling()
+def send_reminder():
+    global ids
+    while True:
+        print(ids)
+        for id in ids:
+            data = [id]
+            expiry_query = "SELECT * FROM Food WHERE userID = ?"
+            result = tuple(conn.execute(expiry_query, data))
+            conn.commit()
+            today = date.today()
+            for i in result:
+                expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
+                food_name = i[1]
+                days_diff = (expiry_date - today).days
+                if days_diff == 0:
+                    bot.send_message(id, f"Your {food_name} is expiring in today! Consume it by today, don't let it go to waste.")
+                elif days_diff == 1:
+                    bot.send_message(id, f"Your {food_name} is expiring in 1 day! Consume it by soon, don't let it go to waste.")
+                elif days_diff == 3:
+                    bot.send_message(id, f"Your {food_name} is expiring in 3 days!")
+        sleep(delay)
+
+
+t = threading.Thread(target=send_reminder)
+t.start()
+
+bot.polling(none_stop=True, interval=0)
 
