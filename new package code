@@ -39,17 +39,21 @@ def start(message):
 def nhousehold(message):
     #add chatid to database
     userID = message.from_user.id
-    household_size = int(message.text)
-    query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
-    conn.execute(query)
-
-    if int(message.text) == 1:
-        bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
-    elif int(message.text) > 1:
-        bot.send_message(message.from_user.id, f"There are {message.text} people in your household.")
+    
+    try: 
+        int(message.text)
+    except:
+        bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
     else:
-      bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
-
+        household_size = int(message.text)
+        query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
+        conn.execute(query)
+    
+        if household_size == 1:
+            bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
+        elif household_size > 1:
+            bot.send_message(message.from_user.id, f"There are {message.text} people in your household.")
+    
 
 @bot.message_handler(commands=['add'])
 def add(message):
