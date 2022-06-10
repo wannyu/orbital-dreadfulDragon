@@ -150,7 +150,6 @@ def consume_sql(message):
 def send_reminder():
     global ids
     while True:
-        print(ids)
         for id in ids:
             data = [id]
             expiry_query = "SELECT * FROM Food WHERE userID = ?"
