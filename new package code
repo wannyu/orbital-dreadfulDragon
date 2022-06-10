@@ -29,34 +29,34 @@ bot = telebot.TeleBot("TOKEN", parse_mode=None)
 
 @bot.message_handler(commands=['help'])
 def help(message):
-    bot.send_message(message.chat.id,"Here are some commands to use the features I provide. \n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date. I’ll help to keep track of it and remind you to consume it before it expires! \n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list.\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
+    bot.send_message(message.from_user.id,"Here are some commands to use the features I provide. \n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date. I’ll help to keep track of it and remind you to consume it before it expires! \n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list.\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    reply = bot.send_message(message.chat.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
+    reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
     
 def nhousehold(message):
     #add chatid to database
-    userID = message.chat.id
+    userID = message.from_user.id
     household_size = int(message.text)
     query = f'INSERT INTO User VALUES({userID}, {household_size}, 0)'
     conn.execute(query)
     if int(message.text) <= 0:
-        bot.send_message(message.chat.id, "Please enter a valid number. Reply /start to start again.")
+        bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
     elif int(message.text) == 1:
-        bot.send_message(message.chat.id, f"There is {message.text} person in your household.")
+        bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
     else:
-        bot.send_message(message.chat.id, f"There are {message.text} people in your household.")
+        bot.send_message(message.from_user.id, f"There are {message.text} people in your household.")
 
 @bot.message_handler(commands=['add'])
 def add(message):
-    reply = bot.send_message(message.chat.id, 'Please state the food name, servings and expiry date.')
+    reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date.')
     bot.register_next_step_handler(reply, add_sql)
    
 def add_sql(message):
     terms = message.text.split(" ")
-    userID = message.chat.id
+    userID = message.from_user.id
     food_name = (terms[0]).lower() #convert all to lower case
     servings = terms[1]
     expiry_date = terms[2]
@@ -72,11 +72,11 @@ def add_sql(message):
         reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
     else:
         reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
-    bot.send_message(message.chat.id, reply)
+    bot.send_message(message.from_user.id, reply)
 
 @bot.message_handler(commands=['list'])
 def list(message):
-    values = [message.chat.id]
+    values = [message.from_user.id]
     query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
     cursor = conn.execute(query, values)
     reply = "This is the current food stock you have: \n"
@@ -88,16 +88,16 @@ def list(message):
         reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
       else:
         reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
-    bot.send_message(message.chat.id, reply)
+    bot.send_message(message.from_user.id, reply)
 
 @bot.message_handler(commands=['consume'])
 def consume(message):
-    reply = bot.send_message(message.chat.id, 'Please state the food name and servings consumed.')
+    reply = bot.send_message(message.from_user.id, 'Please state the food name and servings consumed.')
     bot.register_next_step_handler(reply, consume_sql)
 
 def consume_sql(message):
     terms = message.text.split(" ")
-    userID = message.chat.id
+    userID = message.from_user.id
     food_name = (terms[0]).lower() #convert all to lower case
     servings_consumed = terms[1]
 
@@ -129,6 +129,7 @@ def consume_sql(message):
       conn.commit()
 
     reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
-    bot.send_message(message.chat.id, reply)
+    bot.send_message(message.from_user.id, reply)
 
 bot.infinity_polling()
+
