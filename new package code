@@ -211,5 +211,9 @@ def send_purchase_limit_message():
 t_exceed_limit_reminder = threading.Thread(target=send_purchase_limit_message)
 t_exceed_limit_reminder.start()
 
-
+@bot.message_handler(func=lambda message: True)
+def unknown(message):
+    reply = message.text
+    bot.reply_to(message, f"Sorry, there is no such command. Reply /help if you need guidance on how to use this bot.")
+    
 bot.polling(none_stop=True, interval=0)
