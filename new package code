@@ -36,13 +36,19 @@ ids = []
 
 @bot.message_handler(commands=['help'])
 def help(message):
-    bot.send_message(message.from_user.id,"Here are some commands to use the features I provide. \n\n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date. I’ll help to keep track of it and remind you to consume it before it expires! \nIf you are unsure of servings portions, visit this link: https://www.healthhub.sg/live-healthy/2044/know-your-servings-photo-guide \n\n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list. \n\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
+    bot.send_message(message.from_user.id,"Here are some commands to use the features I provide. \n\n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date (in DD/MM/YYYY). I’ll help to keep track of it and remind you to consume it before it expires! \nIf you are unsure of servings portions, visit this link: https://www.healthhub.sg/live-healthy/2044/know-your-servings-photo-guide \n\n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list. \n\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates.")
 
 @bot.message_handler(commands=['start'])
 def start(message):
     #for reminder
     global ids
     ids.append(message.from_user.id)
+
+    values = (message.from_user.id, 0, 0)
+    query = "INSERT INTO User VALUES(?, ?, ?);"
+    conn.execute(query, values)
+    conn.commit()
+
     reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
     
@@ -53,45 +59,68 @@ def nhousehold(message):
     try: 
         int(message.text)
     except:
-        bot.send_message(message.from_user.id, "Please enter a valid number. Reply /start to start again.")
+        reply = bot.send_message(message.from_user.id, "Please enter a valid number.")
+        bot.register_next_step_handler(reply, nhousehold)
     else:
         household_size = int(message.text)
-        values = (userID, household_size, 0)
-        query = "INSERT INTO User VALUES(?, ?, ?);"
-        conn.execute(query, values)
-        conn.commit()
+
+        if household_size <= 0:
+            reply = bot.send_message(message.from_user.id, "Please enter a valid number.")
+            bot.register_next_step_handler(reply, nhousehold)
+        
+        else:
+            conn.execute(f"UPDATE User SET household = {household_size} WHERE userID = {message.from_user.id};")
+            conn.commit()
     
-        if household_size == 1:
-            bot.send_message(message.from_user.id, f"There is {message.text} person in your household.")
-        elif household_size > 1:
-            bot.send_message(message.from_user.id, f"There are {message.text} people in your household.")
+            if household_size == 1:
+                bot.send_message(message.from_user.id, f"There is {message.text} person in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
+            elif household_size > 1:
+                bot.send_message(message.from_user.id, f"There are {message.text} people in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
     
 
 @bot.message_handler(commands=['add'])
 def add(message):
-    reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date.')
+    reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. \nIf the food name is longer than a word, please use underscore to replace the space. \nEg: bell_pepper 2 19/11/2022')
     bot.register_next_step_handler(reply, add_sql)
    
+# checking for a valid input date
+def validDate(date):
+    day, month, year = date.split('/')
+    isValidDate = True
+    try:
+        dt.datetime(int(year), int(month), int(day))
+    except ValueError:
+        isValidDate = False
+
+    if len(year) != 4:
+        isValidDate = False
+    return isValidDate
+
 def add_sql(message):
     terms = message.text.split(" ")
-    userID = message.from_user.id
-    food_name = (terms[0]).lower() #convert all to lower case
-    servings = terms[1]
-    expiry_date = terms[2]
-    foodID = random.randint(1000, 9999)
-    while foodID in conn.execute('SELECT foodID FROM Food'):
-        foodID =  random.randint(1000, 9999)
-    # INSERT SQL code to add this into our database
-    values = (foodID, food_name, servings, expiry_date, userID)
-    add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
-    conn.execute(add_query, values)
-    reply = f"This is added to your food stock: \n"
-    if servings == "1":
-        reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+    if len(terms) == 3 and not terms[0].isdigit() and terms[1].isdigit() and validDate(terms[2]):
+        userID = message.from_user.id
+        food_name = (terms[0]).lower() #convert all to lower case
+        servings = terms[1]
+        expiry_date = terms[2]
+
+        foodID = random.randint(1000, 9999)
+        while foodID in conn.execute('SELECT foodID FROM Food'):
+            foodID =  random.randint(1000, 9999)
+        # INSERT SQL code to add this into our database
+        values = (foodID, food_name, servings, expiry_date, userID)
+        add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
+        conn.execute(add_query, values)
+        reply = f"This is added to your food stock: \n"
+        if servings == "1":
+            reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+        else:
+            reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+        bot.send_message(message.from_user.id, reply)
+        conn.commit()
     else:
-        reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
-    bot.send_message(message.from_user.id, reply)
-    conn.commit()
+        reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2 15/10/2022"')
+        bot.register_next_step_handler(reply, add_sql)
 
 @bot.message_handler(commands=['list'])
 def list(message):
@@ -111,44 +140,49 @@ def list(message):
 
 @bot.message_handler(commands=['consume'])
 def consume(message):
-    reply = bot.send_message(message.from_user.id, 'Please state the food name and servings consumed.')
+    reply = bot.send_message(message.from_user.id, 'Please state the food name and servings consumed. \nIf the food name is longer than a word, please use underscore to replace the space. \nEg: bell_pepper 1')
     bot.register_next_step_handler(reply, consume_sql)
 
 def consume_sql(message):
     terms = message.text.split(" ")
     userID = message.from_user.id
-    food_name = (terms[0]).lower() #convert all to lower case
-    servings_consumed = terms[1]
 
-    #update SQL 
-    values = [food_name, userID] 
-    query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
-    food = tuple(conn.execute(query, values))
-    if len(food) == 1:
-      #update the servings of the only row
-      earliest_foodID = food[0][0]
+    if len(terms) == 2 and not terms[0].isdigit() and terms[1].isdigit():
+        food_name = (terms[0]).lower() #convert all to lower case
+        servings_consumed = terms[1]
+
+        #update SQL 
+        values = [food_name, userID] 
+        query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
+        food = tuple(conn.execute(query, values))
+        if len(food) == 1:
+          #update the servings of the only row
+          earliest_foodID = food[0][0]
+        else:
+          #choose the one with earlier expiry date
+          data = [food_name, userID] 
+          earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
+          earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
+          earliest_foodID = earliest_expiry[0][0]
+          conn.commit()
+        
+        servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
+
+        servings_left = int(servings) - int(servings_consumed)
+        if servings_left == 0:
+          #delete
+          conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
+          conn.commit()
+        else:
+          #update
+          conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+          conn.commit()
+
+        reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
+        bot.send_message(message.from_user.id, reply)
     else:
-      #choose the one with earlier expiry date
-      data = [food_name, userID] 
-      earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
-      earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
-      earliest_foodID = earliest_expiry[0][0]
-      conn.commit()
-    
-    servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
-
-    servings_left = int(servings) - int(servings_consumed)
-    if servings_left == 0:
-      #delete
-      conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
-      conn.commit()
-    else:
-      #update
-      conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
-      conn.commit()
-
-    reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
-    bot.send_message(message.from_user.id, reply)
+        reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2"')
+        bot.register_next_step_handler(reply, consume_sql)
 
 def send_reminder():
     global ids
@@ -214,6 +248,6 @@ t_exceed_limit_reminder.start()
 @bot.message_handler(func=lambda message: True)
 def unknown(message):
     reply = message.text
-    bot.reply_to(message, "Sorry, there is no such command. Reply /help if you need guidance on how to use this bot.")
+    bot.reply_to(message, "Sorry, there is no such command. \nReply /help if you need guidance on how to use this bot.")
     
 bot.polling(none_stop=True, interval=0)
