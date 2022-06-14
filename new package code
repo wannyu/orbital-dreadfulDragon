@@ -7,7 +7,10 @@ conn.execute('''
 CREATE TABLE User (
     userID,
     household,
-    points
+    points,
+    startDate DATE,
+    weeklyServings,
+    servingLimit
 );''')
 
 conn.commit()
@@ -44,8 +47,8 @@ def start(message):
     global ids
     ids.append(message.from_user.id)
 
-    values = (message.from_user.id, 0, 0)
-    query = "INSERT INTO User VALUES(?, ?, ?);"
+    values = (message.from_user.id, 1, 0, date.today(), 0, 12)
+    query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
     conn.execute(query, values)
     conn.commit()
 
@@ -151,7 +154,7 @@ def consume_sql(message):
         food_name = (terms[0]).lower() #convert all to lower case
         servings_consumed = terms[1]
 
-        #update SQL 
+        #update Food SQL 
         values = [food_name, userID] 
         query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
         food = tuple(conn.execute(query, values))
@@ -177,6 +180,14 @@ def consume_sql(message):
           #update
           conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
           conn.commit()
+
+
+        #update User SQL (servings consumed for the week)
+        result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
+        updated_servings = int(result[0][0]) + int(servings_consumed)
+
+        conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
+        conn.commit()
 
         reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
         bot.send_message(message.from_user.id, reply)
@@ -240,7 +251,7 @@ def send_purchase_limit_message():
 
             if tot_num_of_servings / num_of_days > 12 * int(num_hh_members_result[0][0]):
                 bot.send_message(id, "Oops! It seems that you might have bought too much food to be consumed by your household before they expire! Do think twice before buying more food!")
-        sleep(10)
+        sleep(18000) #every 5 hours
 
 t_exceed_limit_reminder = threading.Thread(target=send_purchase_limit_message)
 t_exceed_limit_reminder.start()
@@ -249,5 +260,39 @@ t_exceed_limit_reminder.start()
 def unknown(message):
     reply = message.text
     bot.reply_to(message, "Sorry, there is no such command. \nReply /help if you need guidance on how to use this bot.")
+
+def update_weekly_consumption():
+    global ids
+    while True:
+        for id in ids:
+            data = [id]
+
+            today = date.today()
+            reset_date_query = "SELECT startDate FROM User WHERE userID = ?"
+            result = tuple(conn.execute(reset_date_query, data))
+            stored_date = dt.datetime.strptime(result[0][0], "%Y-%m-%d").date()
+            if (today - stored_date).days % 7 == 0 and (today - stored_date).days != 0: #7 days interval since it is a weekly update and not == start date
+                weekly_servings_consumed_query = "SELECT weeklyServings FROM User WHERE userID = ?"
+                weekly_servings_consumed_result = tuple(conn.execute(weekly_servings_consumed_query, data))
+                weekly_servings_consumed = int(weekly_servings_consumed_result[0][0])
+
+                hh_member_query = "SELECT household FROM User WHERE userID = ?"
+                num_hh_members_result = tuple(conn.execute(hh_member_query, data))
+                num_hh_members = int(num_hh_members_result[0][0])
+
+                user_limit = weekly_servings_consumed / num_hh_members / 7 
+                if int(user_limit) > 12: #if user consumed more than 12 servings per person per day over the past week. 
+                    #update new limit for this user
+                    conn.execute(f"UPDATE User SET servingLimit = {int(user_limit)} WHERE userID = {id};")
+                    conn.commit()
+
+                #make serving count to be back to 0
+                conn.execute(f"UPDATE User SET weeklyServings = 0 WHERE userID = {id};") 
+                conn.commit()
+        sleep(delay)
+
+t_update_consumption_limit = threading.Thread(target=update_weekly_consumption)
+t_update_consumption_limit.start()
+
     
 bot.polling(none_stop=True, interval=0)
