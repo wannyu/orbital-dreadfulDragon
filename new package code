@@ -107,14 +107,28 @@ def add_sql(message):
         servings = terms[1]
         expiry_date = terms[2]
 
-        foodID = random.randint(1000, 9999)
-        while foodID in conn.execute('SELECT foodID FROM Food'):
-            foodID =  random.randint(1000, 9999)
-        # INSERT SQL code to add this into our database
-        values = (foodID, food_name, servings, expiry_date, userID)
-        add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
-        conn.execute(add_query, values)
-        reply = f"This is added to your food stock: \n"
+        #check if the same food (with same expiry date already exists in database)
+        checking_query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE Food.foodName = ? AND Food.expiryDate = ?"
+        checking_values = (food_name, expiry_date)
+        data = tuple(conn.execute(checking_query, checking_values))
+        
+        if len(data) == 0:
+            foodID = random.randint(1000, 9999)
+            while foodID in conn.execute('SELECT foodID FROM Food'):
+                foodID =  random.randint(1000, 9999)
+            # INSERT SQL code to add this into our database
+            values = (foodID, food_name, servings, expiry_date, userID)
+            add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
+            conn.execute(add_query, values)
+            
+        else:
+            existing_foodID = data[0][0]
+            #existing record of food with same expiry date, just add
+            total_servings = int(data[0][2]) + int(servings)
+            add = f"UPDATE Food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
+            conn.execute(add)
+            conn.commit()
+        reply = "This is added to your food stock: \n"
         if servings == "1":
             reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
         else:
@@ -124,6 +138,7 @@ def add_sql(message):
     else:
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2 15/10/2022"')
         bot.register_next_step_handler(reply, add_sql)
+
 
 @bot.message_handler(commands=['list'])
 def list(message):
