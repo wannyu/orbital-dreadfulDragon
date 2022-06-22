@@ -34,7 +34,6 @@ import threading
 import datetime as dt
 from datetime import date
 from time import sleep
-delay = 86400 #checks every day (24h)
 ids = []
 
 @bot.message_handler(commands=['help'])
@@ -173,39 +172,45 @@ def consume_sql(message):
         values = [food_name, userID] 
         query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
         food = tuple(conn.execute(query, values))
-        if len(food) == 1:
-          #update the servings of the only row
-          earliest_foodID = food[0][0]
+
+        if len(food) == 0: # the input food by user isnt in the foodstock
+            reply = bot.send_message(message.from_user.id, 'Invalid input! You do not have this in your food stock. Please try again!')
+            bot.register_next_step_handler(reply, consume_sql)
+
         else:
-          #choose the one with earlier expiry date
-          data = [food_name, userID] 
-          earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
-          earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
-          earliest_foodID = earliest_expiry[0][0]
-          conn.commit()
-        
-        servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
+            if len(food) == 1:
+                #update the servings of the only row
+                earliest_foodID = food[0][0]
+            else:
+                #choose the one with earlier expiry date
+                data = [food_name, userID] 
+                earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
+                earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
+                earliest_foodID = earliest_expiry[0][0]
+                conn.commit()
+            
+            servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
 
-        servings_left = int(servings) - int(servings_consumed)
-        if servings_left == 0:
-          #delete
-          conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
-          conn.commit()
-        else:
-          #update
-          conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
-          conn.commit()
+            servings_left = int(servings) - int(servings_consumed)
+            if servings_left == 0:
+                #delete
+                conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
+                conn.commit()
+            else:
+                #update
+                conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+                conn.commit()
 
 
-        #update User SQL (servings consumed for the week)
-        result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
-        updated_servings = int(result[0][0]) + int(servings_consumed)
+            #update User SQL (servings consumed for the week)
+            result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
+            updated_servings = int(result[0][0]) + int(servings_consumed)
 
-        conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
-        conn.commit()
+            conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
+            conn.commit()
 
-        reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
-        bot.send_message(message.from_user.id, reply)
+            reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
+            bot.send_message(message.from_user.id, reply)
     else:
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2"')
         bot.register_next_step_handler(reply, consume_sql)
@@ -229,8 +234,7 @@ def send_reminder():
                     bot.send_message(id, f"Your {food_name} is expiring in 1 day! Consume it soon!")
                 elif days_diff == 3:
                     bot.send_message(id, f"Your {food_name} is expiring in 3 days!")
-        sleep(delay)
-
+        sleep(21600) #is every 6h reasonable?
 
 t_expiry_reminder = threading.Thread(target=send_reminder)
 t_expiry_reminder.start()
@@ -304,10 +308,38 @@ def update_weekly_consumption():
                 #make serving count to be back to 0
                 conn.execute(f"UPDATE User SET weeklyServings = 0 WHERE userID = {id};") 
                 conn.commit()
-        sleep(delay)
+        sleep(86400) #updates every day (24h)
 
 t_update_consumption_limit = threading.Thread(target=update_weekly_consumption)
 t_update_consumption_limit.start()
 
-    
-bot.polling(none_stop=True, interval=0)
+
+def check_expired_food():
+    global ids
+    while True:
+        for id in ids:
+            curr_id = [id]
+            today = date.today()
+
+            query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
+            cursor = conn.execute(query, curr_id)
+
+            for row in cursor:
+                food_id = row[0]
+                food_name = row[1]
+                servings = row[2]
+                expiry_date = row[3]
+                expiry_date_dt_form = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date() #convert to date form
+                if (expiry_date_dt_form - today).days < 0: #food expired
+                    bot.send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock.")
+                    conn.execute(f"DELETE FROM Food WHERE foodID = {food_id}")
+                    conn.commit()
+
+        sleep(43200) #checks every 12h
+
+t_check_expired_food = threading.Thread(target=check_expired_food)
+t_check_expired_food.start()
+
+
+bot.infinity_polling(timeout=10, long_polling_timeout = 5)
+#bot.polling(none_stop=True, interval=0)
