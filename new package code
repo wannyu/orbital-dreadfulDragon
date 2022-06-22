@@ -183,33 +183,47 @@ def consume_sql(message):
             else:
                 #choose the one with earlier expiry date
                 data = [food_name, userID] 
-                earliest_expiry_query = "SELECT foodID, MIN(expiryDate) FROM Food WHERE foodName = ? AND userID = ?"
-                earliest_expiry = tuple(conn.execute(earliest_expiry_query, data))
-                earliest_foodID = earliest_expiry[0][0]
+                all_expiry_query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
+                all_expiry = tuple(conn.execute(all_expiry_query, data))
+                
+                earliest_expiry = dt.datetime.strptime(all_expiry[0][1], "%d/%m/%Y").date()
+                food_id_counter = all_expiry[0][0]
+                for row in all_expiry:
+                    item_expiry = dt.datetime.strptime(row[1], "%d/%m/%Y").date()
+                    if (item_expiry - earliest_expiry).days < 0:
+                        earliest_expiry = item_expiry
+                        food_id_counter = row[0]
+
+                earliest_foodID = food_id_counter
                 conn.commit()
             
             servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
 
             servings_left = int(servings) - int(servings_consumed)
-            if servings_left == 0:
-                #delete
-                conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
-                conn.commit()
+            if servings_left < 0:
+                reply = bot.send_message(message.from_user.id, 'Your serving input is more than what you have in your food stock! Please try again with the correct number of servings.')
+                bot.register_next_step_handler(reply, consume_sql)
+
             else:
-                #update
-                conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+                if servings_left == 0:
+                    #delete
+                    conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
+                    conn.commit()
+                else:
+                    #update
+                    conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+                    conn.commit()
+
+
+                #update User SQL (servings consumed for the week)
+                result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
+                updated_servings = int(result[0][0]) + int(servings_consumed)
+
+                conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
                 conn.commit()
 
-
-            #update User SQL (servings consumed for the week)
-            result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
-            updated_servings = int(result[0][0]) + int(servings_consumed)
-
-            conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
-            conn.commit()
-
-            reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
-            bot.send_message(message.from_user.id, reply)
+                reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
+                bot.send_message(message.from_user.id, reply)
     else:
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2"')
         bot.register_next_step_handler(reply, consume_sql)
