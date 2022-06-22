@@ -45,7 +45,7 @@ def start(message):
     global ids
     ids.append(message.from_user.id)
 
-    values = (message.from_user.id, 1, 0, date.today(), 0, 12)
+    values = (message.from_user.id, 1, 0, date.today(), 0, 15)
     query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
     conn.execute(query, values)
     conn.commit()
@@ -281,7 +281,7 @@ def send_purchase_limit_message():
             if num_of_days == 0:
               num_of_days = 1 #change to 1 to avoid division by zero (also means that the food is expiring today)
 
-            if tot_num_of_servings / num_of_days > 12 * int(num_hh_members_result[0][0]):
+            if tot_num_of_servings / num_of_days > 15 * int(num_hh_members_result[0][0]):
                 bot.send_message(id, "Oops! It seems that you might have bought too much food to be consumed by your household before they expire! Do think twice before buying more food!")
         sleep(18000) #every 5 hours
 
@@ -313,7 +313,7 @@ def update_weekly_consumption():
                 num_hh_members = int(num_hh_members_result[0][0])
 
                 user_limit = weekly_servings_consumed / num_hh_members / 7 
-                if int(user_limit) > 12: #if user consumed more than 12 servings per person per day over the past week. 
+                if int(user_limit) != 15: #if user consumed an amount different from 15 servings per person per day over the past week. 
                     #update new limit for this user
                     conn.execute(f"UPDATE User SET servingLimit = {int(user_limit)} WHERE userID = {id};")
                     conn.commit()
