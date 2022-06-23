@@ -3,6 +3,8 @@
 import sqlite3
 conn = sqlite3.connect('foodSaver.db', check_same_thread=False)
 
+ids = []
+
 conn.execute('''
 CREATE TABLE User (
     userID,
@@ -24,11 +26,10 @@ CREATE TABLE Food (
     expiryDate DATE,
     userID,
     PRIMARY KEY (foodID),
-    FOREIGN KEY (userID)
+    FOREIGN KEY (userID) REFERENCES User(userID)
 );''')
 
 conn.commit()
-
 import random
 import telebot
 bot = telebot.TeleBot("TOKEN", parse_mode=None) 
@@ -37,7 +38,7 @@ import threading
 import datetime as dt
 from datetime import date
 from time import sleep
-ids = []
+
 
 @bot.message_handler(commands=['help'])
 def help(message):
@@ -46,16 +47,17 @@ def help(message):
 def start(message):
     #for reminder
     global ids
-    ids.append(message.from_user.id)
-
-    if tuple(userID) in tuple(conn.execute('SELECT userID FROM User')):
-        conn.execute(f"UPDATE User SET household = 1 WHERE userID = {message.from_user.id};")
-        conn.commit()
-    else:
+    if message.from_user.id not in ids:
+        ids.append(message.from_user.id)
         values = (message.from_user.id, 1, 0, date.today(), 0, 15)
         query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
         conn.execute(query, values)
         conn.commit()
+    else:
+       conn.execute(f"UPDATE User SET household = 1 WHERE userID = {message.from_user.id};")
+       conn.commit()
+
+    
 
     reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
