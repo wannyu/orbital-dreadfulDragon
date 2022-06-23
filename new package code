@@ -23,7 +23,8 @@ CREATE TABLE Food (
     servings,
     expiryDate DATE,
     userID,
-    PRIMARY KEY (foodID)
+    PRIMARY KEY (foodID),
+    FOREIGN KEY (userID)
 );''')
 
 conn.commit()
@@ -47,10 +48,14 @@ def start(message):
     global ids
     ids.append(message.from_user.id)
 
-    values = (message.from_user.id, 1, 0, date.today(), 0, 15)
-    query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
-    conn.execute(query, values)
-    conn.commit()
+    if tuple(userID) in tuple(conn.execute('SELECT userID FROM User')):
+        conn.execute(f"UPDATE User SET household = 1 WHERE userID = {message.from_user.id};")
+        conn.commit()
+    else:
+        values = (message.from_user.id, 1, 0, date.today(), 0, 15)
+        query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
+        conn.execute(query, values)
+        conn.commit()
 
     reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
