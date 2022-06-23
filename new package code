@@ -115,8 +115,8 @@ def add_sql(message):
         expiry_date = terms[2]
 
         #check if the same food (with same expiry date already exists in database)
-        checking_query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE Food.foodName = ? AND Food.expiryDate = ?"
-        checking_values = (food_name, expiry_date)
+        checking_query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE Food.foodName = ? AND Food.expiryDate = ? AND userID = ?"
+        checking_values = (food_name, expiry_date, message.from_user.id)
         data = tuple(conn.execute(checking_query, checking_values))
         
         if len(data) == 0:
