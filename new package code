@@ -10,7 +10,8 @@ CREATE TABLE User (
     points,
     startDate DATE,
     weeklyServings,
-    servingLimit
+    servingLimit,
+    PRIMARY KEY (userID)
 );''')
 
 conn.commit()
@@ -21,7 +22,8 @@ CREATE TABLE Food (
     foodName,
     servings,
     expiryDate DATE,
-    userID
+    userID,
+    PRIMARY KEY (foodID)
 );''')
 
 conn.commit()
