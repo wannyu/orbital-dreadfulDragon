@@ -36,8 +36,8 @@ import telebot
 bot = telebot.TeleBot("TOKEN", parse_mode=None) 
 
 import threading
-#import datetime as dt
-#from datetime import date
+import datetime as dt
+from datetime import date
 from datetime import datetime
 from time import sleep
 
@@ -56,7 +56,12 @@ def start(message):
     global ids
     if message.from_user.id not in ids:
         ids.append(message.from_user.id)
-        values = (message.from_user.id, 1, 0, datetime.today().date(), 0, 15)
+
+        #getting today's date
+        sg = datetime.now(tz)
+        today = sg.date()
+
+        values = (message.from_user.id, 1, 0, today, 0, 15)
         query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
         conn.execute(query, values)
         conn.commit()
@@ -256,7 +261,11 @@ def send_reminder():
             expiry_query = "SELECT * FROM Food WHERE userID = ?"
             result = tuple(conn.execute(expiry_query, data))
             conn.commit()
-            today = datetime.today().date()
+
+            #getting today's date
+            sg = datetime.now(tz)
+            today = sg.date()
+
             for i in result:
                 expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
                 food_name = i[1]
@@ -284,7 +293,9 @@ def send_purchase_limit_message():
             food_query = "SELECT * FROM Food WHERE userID = ?"
             result = tuple(conn.execute(food_query, data))
             
-            today = datetime.today().date()
+            #getting today's date
+            sg = datetime.now(tz)
+            today = sg.date()
 
             for i in result:
                 expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
@@ -320,7 +331,10 @@ def update_weekly_consumption():
         for id in ids:
             data = [id]
 
-            today = datetime.today().date()
+            #getting today's date
+            sg = datetime.now(tz)
+            today = sg.date()
+
             reset_date_query = "SELECT startDate FROM User WHERE userID = ?"
             result = tuple(conn.execute(reset_date_query, data))
             stored_date = dt.datetime.strptime(result[0][0], "%Y-%m-%d").date()
@@ -353,7 +367,10 @@ def check_expired_food():
     while True:
         for id in ids:
             curr_id = [id]
-            today = datetime.today().date()
+            
+            #getting today's date
+            sg = datetime.now(tz)
+            today = sg.date()
 
             query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
             cursor = conn.execute(query, curr_id)
