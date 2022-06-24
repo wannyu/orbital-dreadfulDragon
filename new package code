@@ -39,6 +39,7 @@ import datetime as dt
 from datetime import date
 from time import sleep
 
+import math
 
 @bot.message_handler(commands=['help'])
 def help(message):
@@ -270,9 +271,8 @@ def send_purchase_limit_message():
     global ids 
     while True:
         for id in ids:
-            # counters to keep track of total servings a user has and the latest expiry date of all food
-            num_of_days = 0
-            tot_num_of_servings = 0
+            # counter to keep track of sum of servings divided by their respective num of days to expiry
+            servings_div_by_days_left = 0
 
             data = [id]
             food_query = "SELECT * FROM Food WHERE userID = ?"
@@ -285,16 +285,18 @@ def send_purchase_limit_message():
                 days_left = (expiry_date - today).days
                 num_servings = int(i[2])
 
-                num_of_days = max(num_of_days, days_left)
-                tot_num_of_servings += num_servings
+                #if the food expires today, then change it to 1 (1 day left to eat) <avoid zero division error>
+                if days_left == 0: 
+                    days_left = 1
+                servings_div_by_days_left += num_servings / days_left
 
             hh_member_query = "SELECT household FROM User WHERE userID = ?"
             num_hh_members_result = tuple(conn.execute(hh_member_query, data))
-            
-            if num_of_days == 0:
-              num_of_days = 1 #change to 1 to avoid division by zero (also means that the food is expiring today)
 
-            if tot_num_of_servings / num_of_days > 15 * int(num_hh_members_result[0][0]):
+            user_serving_lim_query = "SELECT servingLimit FROM User WHERE userID = ?"
+            user_serving_lim_result = tuple(conn.execute(user_serving_lim_query, data))
+
+            if servings_div_by_days_left / int(num_hh_members_result[0][0]) > int(user_serving_lim_result[0][0]):
                 bot.send_message(id, "Oops! It seems that you might have bought too much food to be consumed by your household before they expire! Do think twice before buying more food!")
         sleep(18000) #every 5 hours
 
@@ -326,10 +328,10 @@ def update_weekly_consumption():
                 num_hh_members = int(num_hh_members_result[0][0])
 
                 user_limit = weekly_servings_consumed / num_hh_members / 7 
-                if int(user_limit) != 15: #if user consumed an amount different from 15 servings per person per day over the past week. 
-                    #update new limit for this user
-                    conn.execute(f"UPDATE User SET servingLimit = {int(user_limit)} WHERE userID = {id};")
-                    conn.commit()
+                rounded_value = math.ceil(user_limit)
+                #update new limit for this user
+                conn.execute(f"UPDATE User SET servingLimit = {rounded_value} WHERE userID = {id};")
+                conn.commit()
 
                 #make serving count to be back to 0
                 conn.execute(f"UPDATE User SET weeklyServings = 0 WHERE userID = {id};") 
