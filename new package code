@@ -1,39 +1,25 @@
-!pip install pyTelegramBotAPI
+#code that was altered for server to run the bot
 
-import sqlite3
-conn = sqlite3.connect('foodSaver.db', check_same_thread=False)
+import psycopg2
+from urllib.parse import urlparse
+result = urlparse("postgres://vitipfhrqnvwsk:d62b8e0ade1c3fbe7a1a1de0600e6c48161c63e7d8459af68f1653748d6c1fea@ec2-44-197-128-108.compute-1.amazonaws.com:5432/d9mkmcr88s1ap9")
+username = result.username
+password = result.password
+database = result.path[1:]
+hostname = result.hostname
+port = result.port
 
-ids = []
-
-conn.execute('''
-CREATE TABLE User (
-    userID,
-    household,
-    points,
-    startDate DATE,
-    weeklyServings,
-    servingLimit,
-    PRIMARY KEY (userID)
-);''')
-
-conn.commit()
-
-conn.execute('''
-CREATE TABLE Food (
-    foodID,
-    foodName,
-    servings,
-    expiryDate DATE,
-    userID,
-    PRIMARY KEY (foodID),
-    FOREIGN KEY (userID) REFERENCES User(userID)
-);''')
-
-conn.commit()
+conn = psycopg2.connect(
+    database = database,
+    user = username,
+    password = password,
+    host = hostname,
+    port = port
+)
 
 import random
 import telebot
-bot = telebot.TeleBot("TOKEN", parse_mode=None) 
+bot = telebot.TeleBot("TOKEN", parse_mode=None)
 
 import threading
 import datetime as dt
@@ -50,10 +36,20 @@ import math
 @bot.message_handler(commands=['help'])
 def help(message):
     bot.send_message(message.from_user.id,"Here are some commands to use the features I provide. \n\n/add: Everytime you purchase food, simply log in the food, the amount (in servings) and its expiry date (in DD/MM/YYYY). I’ll help to keep track of it and remind you to consume it before it expires! \nIf you are unsure of servings portions, visit this link: https://www.healthhub.sg/live-healthy/2044/know-your-servings-photo-guide \n\n/consume: Everytime you consume a certain type of food, tell me exactly what you consumed, the amount and I’ll remove it from the list. \n\n/list: This allows you to view a list of all the available food you have at any point in time to prevent buying duplicates. \n\n *IMPORTANT* \nPlease be consistent in entering the food names (eg. if previously /add was used to add an 'apple', when you /consume, 'apple' should be entered instead of 'apples'.")
+
+
+
 @bot.message_handler(commands=['start'])
 def start(message):
     #for reminder
-    global ids
+    cur = conn.cursor()
+    cur.execute("SELECT userID FROM users;")
+    result = cur.fetchall()
+    ids = []
+    if result:
+        for tupleid in result:
+            ids = ids + [tupleid[0]]
+
     if message.from_user.id not in ids:
         ids.append(message.from_user.id)
 
@@ -61,24 +57,26 @@ def start(message):
         sg = datetime.now(tz)
         today = sg.date()
 
+        cur = conn.cursor()
         values = (message.from_user.id, 1, 0, today, 0, 15)
-        query = "INSERT INTO User VALUES(?, ?, ?, ?, ?, ?);"
-        conn.execute(query, values)
+        query = "INSERT INTO users VALUES(%s, %s, %s, %s, %s, %s);"
+        cur.execute(query, values)
         conn.commit()
     else:
-       conn.execute(f"UPDATE User SET household = 1 WHERE userID = {message.from_user.id};")
-       conn.commit()
-
-    
+        cur = conn.cursor()
+        cur.execute(f"UPDATE users SET household = 1 WHERE userID = {message.from_user.id};")
+        conn.commit()
 
     reply = bot.send_message(message.from_user.id, "Hello! I’m FoodSaver, I’m here to reduce food wastage. To get started, please state the number of people in your household (eg. 1, 2, 3 etc).")
     bot.register_next_step_handler(reply, nhousehold)
-    
+
+
+
 def nhousehold(message):
     #add chatid to database
     userID = message.from_user.id
-    
-    try: 
+
+    try:
         int(message.text)
     except:
         reply = bot.send_message(message.from_user.id, "Please enter a valid number.")
@@ -89,25 +87,29 @@ def nhousehold(message):
         if household_size <= 0:
             reply = bot.send_message(message.from_user.id, "Please enter a valid number.")
             bot.register_next_step_handler(reply, nhousehold)
-        
+
         else:
-            conn.execute(f"UPDATE User SET household = {household_size} WHERE userID = {message.from_user.id};")
+            cur = conn.cursor()
+            cur.execute(f"UPDATE users SET household = {household_size} WHERE userID = {message.from_user.id};")
             conn.commit()
-    
+
             if household_size == 1:
                 bot.send_message(message.from_user.id, f"There is {message.text} person in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
             elif household_size > 1:
                 bot.send_message(message.from_user.id, f"There are {message.text} people in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
-    
+
+
 
 @bot.message_handler(commands=['add'])
 def add(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. \nIf the food name is longer than a word, please use underscore to replace the space. \nEg: bell_pepper 2 19/11/2022')
     bot.register_next_step_handler(reply, add_sql)
-   
+
+
+
 # checking for a valid input date
 def validDate(date):
-    try: 
+    try:
         day, month, year = date.split('/')
     except ValueError:
         isValidDate = False
@@ -122,40 +124,55 @@ def validDate(date):
             isValidDate = False
     return isValidDate
 
+
+
 def add_sql(message):
+    cur = conn.cursor()
     terms = message.text.split(" ")
     if len(terms) == 3 and not terms[0].isdigit() and terms[1].isdigit() and validDate(terms[2]):
         userID = message.from_user.id
         food_name = (terms[0]).lower() #convert all to lower case
         servings = terms[1]
         expiry_date = terms[2]
+        expiry_date = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date()
 
         #check if the same food (with same expiry date already exists in database)
-        checking_query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE Food.foodName = ? AND Food.expiryDate = ? AND userID = ?"
+        cur = conn.cursor()
+        checking_query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE food.foodName = %s AND food.expiryDate = %s AND userID = %s"
         checking_values = (food_name, expiry_date, message.from_user.id)
-        data = tuple(conn.execute(checking_query, checking_values))
-        
+        cur.execute(checking_query, checking_values)
+        data = cur.fetchall()
+
         if len(data) == 0:
             foodID = random.randint(1000, 9999)
-            while foodID in conn.execute('SELECT foodID FROM Food'):
+            cur = conn.cursor()
+            cur.execute('SELECT foodID FROM food')
+            result = cur.fetchall()
+            while foodID in result:
                 foodID =  random.randint(1000, 9999)
             # INSERT SQL code to add this into our database
             values = (foodID, food_name, servings, expiry_date, userID)
-            add_query = "INSERT INTO Food VALUES(?, ?, ?, ?, ?);"
-            conn.execute(add_query, values)
-            
+            cur = conn.cursor()
+            add_query = "INSERT INTO food VALUES(%s, %s, %s, %s, %s);"
+            cur.execute(add_query, values)
+            conn.commit()
+
         else:
             existing_foodID = data[0][0]
             #existing record of food with same expiry date, just add
             total_servings = int(data[0][2]) + int(servings)
-            add = f"UPDATE Food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
-            conn.execute(add)
+            cur = conn.cursor()
+            add = f"UPDATE food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
+            cur.execute(add)
             conn.commit()
+
         reply = "This is added to your food stock: \n"
         if servings == "1":
-            reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+            expiry_date = expiry_date.strftime('%d/%m/%Y')
+            reply += f"{food_name} ({servings} serving) expires {expiry_date} \n"
         else:
-            reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+            expiry_date = expiry_date.strftime('%d/%m/%Y')
+            reply += f"{food_name} ({servings} servings) expires {expiry_date} \n"
         bot.send_message(message.from_user.id, reply)
         conn.commit()
     else:
@@ -163,26 +180,34 @@ def add_sql(message):
         bot.register_next_step_handler(reply, add_sql)
 
 
+
 @bot.message_handler(commands=['list'])
 def list(message):
     values = [message.from_user.id]
-    query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
-    cursor = conn.execute(query, values)
+    cur = conn.cursor()
+    query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s"
+    cur.execute(query, values)
+    cursor = cur.fetchall()
     reply = "This is the current food stock you have: \n"
     for row in cursor:
       food_name = row[1]
       servings = row[2]
       expiry_date = row[3]
+      expiry_date = expiry_date.strftime('%d/%m/%Y')
       if servings == "1":
-        reply += f"{food_name} ({servings} serving) expires {expiry_date} \n" 
+        reply += f"{food_name} ({servings} serving) expires {expiry_date} \n"
       else:
-        reply += f"{food_name} ({servings} servings) expires {expiry_date} \n" 
+        reply += f"{food_name} ({servings} servings) expires {expiry_date} \n"
     bot.send_message(message.from_user.id, reply)
+
+
 
 @bot.message_handler(commands=['consume'])
 def consume(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name and servings consumed. \nIf the food name is longer than a word, please use underscore to replace the space. \nEg: bell_pepper 1')
     bot.register_next_step_handler(reply, consume_sql)
+
+
 
 def consume_sql(message):
     terms = message.text.split(" ")
@@ -192,10 +217,12 @@ def consume_sql(message):
         food_name = (terms[0]).lower() #convert all to lower case
         servings_consumed = terms[1]
 
-        #update Food SQL 
-        values = [food_name, userID] 
-        query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
-        food = tuple(conn.execute(query, values))
+        #update Food SQL
+        values = [food_name, userID]
+        cur = conn.cursor()
+        query = "SELECT foodID, expiryDate FROM food WHERE foodName = %s AND userID = %s"
+        cur.execute(query, values)
+        food = cur.fetchall()
 
         if len(food) == 0: # the input food by user isnt in the foodstock
             reply = bot.send_message(message.from_user.id, 'Invalid input! You do not have this in your food stock. Please try again!')
@@ -207,10 +234,12 @@ def consume_sql(message):
                 earliest_foodID = food[0][0]
             else:
                 #choose the one with earlier expiry date
-                data = [food_name, userID] 
-                all_expiry_query = "SELECT foodID, expiryDate FROM Food WHERE foodName = ? AND userID = ?"
-                all_expiry = tuple(conn.execute(all_expiry_query, data))
-                
+                data = [food_name, userID]
+                cur = conn.cursor()
+                all_expiry_query = "SELECT foodID, expiryDate FROM food WHERE foodName = %s AND userID = %s"
+                cur.execute(all_expiry_query, data)
+                all_expiry = cur.fetchall()
+
                 earliest_expiry = dt.datetime.strptime(all_expiry[0][1], "%d/%m/%Y").date()
                 food_id_counter = all_expiry[0][0]
                 for row in all_expiry:
@@ -221,8 +250,10 @@ def consume_sql(message):
 
                 earliest_foodID = food_id_counter
                 conn.commit()
-            
-            servings = tuple(conn.execute(f"SELECT servings FROM Food WHERE foodID = {earliest_foodID}"))[0][0]
+
+            cur = conn.cursor()
+            cur.execute(f"SELECT servings FROM food WHERE foodID = {earliest_foodID}")
+            servings = cur.fetchall()[0][0]
 
             servings_left = int(servings) - int(servings_consumed)
             if servings_left < 0:
@@ -232,19 +263,24 @@ def consume_sql(message):
             else:
                 if servings_left == 0:
                     #delete
-                    conn.execute(f"DELETE FROM Food WHERE foodID = {earliest_foodID}")
+                    cur = conn.cursor()
+                    cur.execute(f"DELETE FROM food WHERE foodID = {earliest_foodID}")
                     conn.commit()
                 else:
                     #update
-                    conn.execute(f"UPDATE Food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
+                    cur = conn.cursor()
+                    cur.execute(f"UPDATE food SET servings = {servings_left} WHERE foodID = {earliest_foodID}")
                     conn.commit()
 
 
                 #update User SQL (servings consumed for the week)
-                result = tuple(conn.execute(f"SELECT weeklyServings FROM User WHERE userID = {message.from_user.id}"))
+                cur = conn.cursor()
+                cur.execute(f"SELECT weeklyServings FROM users WHERE userID = {message.from_user.id}")
+                result = cur.fetchall()
                 updated_servings = int(result[0][0]) + int(servings_consumed)
 
-                conn.execute(f"UPDATE User SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
+                cur = conn.cursor()
+                cur.execute(f"UPDATE users SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
                 conn.commit()
 
                 reply = f"This is removed from your food list: \n {food_name} ({servings_consumed} serving(s))\n"
@@ -253,21 +289,40 @@ def consume_sql(message):
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2"')
         bot.register_next_step_handler(reply, consume_sql)
 
-def send_reminder():
-    global ids
+
+
+@bot.message_handler(func=lambda message: True)
+def unknown(message):
+    reply = message.text
+    bot.reply_to(message, "Sorry, there is no such command. \nReply /help if you need guidance on how to use this bot.")
+
+
+
+def threading_func():
+    cur = conn.cursor()
+    cur.execute("SELECT userID FROM users;")
+    result = cur.fetchall()
+    ids = []
+    if result:
+        for tupleid in result:
+            ids = ids + [tupleid[0]]
+
     while True:
         for id in ids:
+            ##### send reminder for soon to be expired food #####
             data = [id]
-            expiry_query = "SELECT * FROM Food WHERE userID = ?"
-            result = tuple(conn.execute(expiry_query, data))
+            cur = conn.cursor()
+            expiry_query = "SELECT * FROM food WHERE userID = %s"
+            cur.execute(expiry_query, data)
+            result = cur.fetchall()
             conn.commit()
-
+            
             #getting today's date
             sg = datetime.now(tz)
             today = sg.date()
 
             for i in result:
-                expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
+                expiry_date = i[3] #dt.datetime.strptime(i[3], "%d/%m/%Y").date()
                 food_name = i[1]
                 days_diff = (expiry_date - today).days
                 if days_diff == 0:
@@ -276,120 +331,117 @@ def send_reminder():
                     bot.send_message(id, f"Your {food_name} is expiring in 1 day! Consume it soon!")
                 elif days_diff == 3:
                     bot.send_message(id, f"Your {food_name} is expiring in 3 days!")
-        sleep(21600) #is every 6h reasonable?
-
-t_expiry_reminder = threading.Thread(target=send_reminder)
-t_expiry_reminder.start()
 
 
-def send_purchase_limit_message():
-    global ids 
-    while True:
-        for id in ids:
-            # counter to keep track of sum of servings divided by their respective num of days to expiry
+
+            ##### send purchase limit message #####
             servings_div_by_days_left = 0
-
             data = [id]
-            food_query = "SELECT * FROM Food WHERE userID = ?"
-            result = tuple(conn.execute(food_query, data))
-            
+            cur = conn.cursor()
+            food_query = "SELECT * fROM Food WHERE userID = %s"
+            cur.execute(food_query, data)
+            result = cur.fetchall()
+            #cur.close()
+
             #getting today's date
             sg = datetime.now(tz)
             today = sg.date()
 
             for i in result:
-                expiry_date = dt.datetime.strptime(i[3], "%d/%m/%Y").date()
+                expiry_date = dt.datetime.strptime(str(i[3]), "%Y-%m-%d").date()
                 days_left = (expiry_date - today).days
                 num_servings = int(i[2])
 
-                #if the food expires today, then change it to 1 (1 day left to eat) <avoid zero division error>
-                if days_left == 0: 
+                #if the food expires today, then change it to 1 (1 day left to eat)
+                if days_left == 0:
                     days_left = 1
                 servings_div_by_days_left += num_servings / days_left
 
-            hh_member_query = "SELECT household FROM User WHERE userID = ?"
-            num_hh_members_result = tuple(conn.execute(hh_member_query, data))
+            cur = conn.cursor()
+            hh_member_query = "SELECT household FROM users WHERE userID = %s"
+            cur.execute(hh_member_query, data)
+            num_hh_members_result = cur.fetchall()
+            #cur.close()
 
-            user_serving_lim_query = "SELECT servingLimit FROM User WHERE userID = ?"
-            user_serving_lim_result = tuple(conn.execute(user_serving_lim_query, data))
+            cur = conn.cursor()
+            user_serving_lim_query = "SELECT servingLimit FROM users WHERE userID = %s"
+            cur.execute(user_serving_lim_query, data)
+            user_serving_lim_result = cur.fetchall()
+            #cur.close()
 
             if servings_div_by_days_left / int(num_hh_members_result[0][0]) > int(user_serving_lim_result[0][0]):
                 bot.send_message(id, "Oops! It seems that you might have bought too much food to be consumed by your household before they expire! Do think twice before buying more food!")
-        sleep(18000) #every 5 hours
 
-t_exceed_limit_reminder = threading.Thread(target=send_purchase_limit_message)
-t_exceed_limit_reminder.start()
 
-@bot.message_handler(func=lambda message: True)
-def unknown(message):
-    reply = message.text
-    bot.reply_to(message, "Sorry, there is no such command. \nReply /help if you need guidance on how to use this bot.")
 
-def update_weekly_consumption():
-    global ids
-    while True:
-        for id in ids:
+            ##### update weekly consumption #####
             data = [id]
 
             #getting today's date
             sg = datetime.now(tz)
             today = sg.date()
 
-            reset_date_query = "SELECT startDate FROM User WHERE userID = ?"
-            result = tuple(conn.execute(reset_date_query, data))
-            stored_date = dt.datetime.strptime(result[0][0], "%Y-%m-%d").date()
+            cur = conn.cursor()
+            reset_date_query = "SELECT startDate FROM users WHERE userID = %s"
+            cur.execute(reset_date_query, data)
+            result = cur.fetchall()
+            stored_date = result[0][0] #dt.datetime.strptime(result[0][0], "%Y-%m-%d").date()
+            
             if (today - stored_date).days % 7 == 0 and (today - stored_date).days != 0: #7 days interval since it is a weekly update and not == start date
-                weekly_servings_consumed_query = "SELECT weeklyServings FROM User WHERE userID = ?"
-                weekly_servings_consumed_result = tuple(conn.execute(weekly_servings_consumed_query, data))
+                cur = conn.cursor()
+                weekly_servings_consumed_query = "SELECT weeklyServings FROM users WHERE userID = %s"
+                cur.execute(weekly_servings_consumed_query, data)
+                weekly_servings_consumed_result = cur.fetchall()
                 weekly_servings_consumed = int(weekly_servings_consumed_result[0][0])
 
-                hh_member_query = "SELECT household FROM User WHERE userID = ?"
-                num_hh_members_result = tuple(conn.execute(hh_member_query, data))
+                cur = conn.cursor()
+                hh_member_query = "SELECT household FROM users WHERE userID = %s"
+                cur.execute(hh_member_query, data)
+                num_hh_members_result = cur.fetchall()
                 num_hh_members = int(num_hh_members_result[0][0])
 
-                user_limit = weekly_servings_consumed / num_hh_members / 7 
+                user_limit = weekly_servings_consumed / num_hh_members / 7
                 rounded_value = math.ceil(user_limit)
+                
                 #update new limit for this user
-                conn.execute(f"UPDATE User SET servingLimit = {rounded_value} WHERE userID = {id};")
-                conn.commit()
+                if rounded_value > 0:
+                    cur = conn.cursor()
+                    cur.execute(f"UPDATE users SET servingLimit = {rounded_value} WHERE userID = {id};")
+                    conn.commit()
 
                 #make serving count to be back to 0
-                conn.execute(f"UPDATE User SET weeklyServings = 0 WHERE userID = {id};") 
+                cur = conn.cursor()
+                cur.execute(f"UPDATE users SET weeklyServings = 0 WHERE userID = {id};")
                 conn.commit()
-        sleep(86400) #updates every day (24h)
-
-t_update_consumption_limit = threading.Thread(target=update_weekly_consumption)
-t_update_consumption_limit.start()
-
-
-def check_expired_food():
-    global ids
-    while True:
-        for id in ids:
+       
+       
+       
+            ##### checking for expired food #####
             curr_id = [id]
-            
+
             #getting today's date
             sg = datetime.now(tz)
             today = sg.date()
 
-            query = "SELECT foodID, foodName, servings, expiryDate FROM Food WHERE userID = ?"
-            cursor = conn.execute(query, curr_id)
+            cur = conn.cursor()
+            query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s"
+            cur.execute(query, curr_id)
+            cursor = cur.fetchall()
 
             for row in cursor:
                 food_id = row[0]
                 food_name = row[1]
                 servings = row[2]
                 expiry_date = row[3]
-                expiry_date_dt_form = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date() #convert to date form
-                if (expiry_date_dt_form - today).days < 0: #food expired
+                if (expiry_date - today).days < 0: #food expired
+                    expiry_date = expiry_date.strftime('%d/%m/%Y')
                     bot.send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock.")
-                    conn.execute(f"DELETE FROM Food WHERE foodID = {food_id}")
+                    cur.execute(f"DELETE FROM food WHERE foodID = {food_id}")
                     conn.commit()
 
-        sleep(43200) #checks every 12h
-
-t_check_expired_food = threading.Thread(target=check_expired_food)
-t_check_expired_food.start()
+        sleep(9000)
+worker = threading.Thread(target=threading_func, args=())
+worker.start()
 
 
 bot.infinity_polling(timeout=10, long_polling_timeout = 5)
