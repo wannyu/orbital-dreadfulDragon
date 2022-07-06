@@ -240,10 +240,10 @@ def consume_sql(message):
                 cur.execute(all_expiry_query, data)
                 all_expiry = cur.fetchall()
 
-                earliest_expiry = dt.datetime.strptime(all_expiry[0][1], "%d/%m/%Y").date()
+                earliest_expiry = all_expiry[0][1]
                 food_id_counter = all_expiry[0][0]
                 for row in all_expiry:
-                    item_expiry = dt.datetime.strptime(row[1], "%d/%m/%Y").date()
+                    item_expiry = row[1]
                     if (item_expiry - earliest_expiry).days < 0:
                         earliest_expiry = item_expiry
                         food_id_counter = row[0]
