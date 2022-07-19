@@ -1,3 +1,6 @@
+#not in use anymore
+
+
 !pip install python-telegram-bot
 import logging
 import random
