@@ -2,7 +2,6 @@
 def list(message):
     values = [message.from_user.id]
     cur = conn.cursor()
-    #query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s"
     query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s ORDER BY expiryDate, foodName"
     cur.execute(query, values)
     cursor = cur.fetchall()
