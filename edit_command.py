@@ -1,3 +1,6 @@
+from telebot import types
+import functions
+
 def gen_markup():
     markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
     food_name = types.KeyboardButton('Food Name')
@@ -248,7 +251,10 @@ def edit_servings_sql(message):
                         data = (foodID, message.from_user.id)
                         cur.execute(f"DELETE FROM food WHERE foodID = %s AND userID = %s", data)
                         conn.commit()
-                        bot.send_message(message.from_user.id, f"{old_servings} serving(s) of {name} is removed from your list.")  
+                        if old_servings == 1:
+                            bot.send_message(message.from_user.id, f"{old_servings} serving of {name} is removed from your list.")  
+                        else:
+                            bot.send_message(message.from_user.id, f"{old_servings} servings of {name} is removed from your list.") 
 
     
  
@@ -266,9 +272,7 @@ def edit_expiry_sql(message):
             reply = bot.send_message(message.from_user.id, "Please enter a valid expiry date.")
             bot.register_next_step_handler(reply, edit_expiry_sql)
         else:
-            #getting today's date
-            sg = datetime.now(tz)
-            today = sg.date()
+            today = get_today()
             if not validDate(expiry_date):
                 #date isnt a valid date
                 reply = bot.send_message(message.from_user.id, "Please enter a valid expiry date.")
@@ -334,5 +338,3 @@ def edit_expiry_sql(message):
                         cur.execute(f"UPDATE food SET expiryDate= %s WHERE foodID = %s AND userID = %s", updated_values)
                         conn.commit() 
                     bot.send_message(message.from_user.id, f"Expiry date of {name} successfully updated from {old_expiry.strftime('%d/%m/%Y')} to {new_expiry.strftime('%d/%m/%Y')}")
-
- 
