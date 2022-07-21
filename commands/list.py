@@ -11,7 +11,7 @@ def list(message):
       servings = row[2]
       expiry_date = row[3]
       expiry_date = expiry_date.strftime('%d/%m/%Y')
-      if servings == "1":
+      if servings == 1:
         reply += f"{food_name} ({servings} serving) expires {expiry_date} \n"
       else:
         reply += f"{food_name} ({servings} servings) expires {expiry_date} \n"
