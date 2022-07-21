@@ -57,7 +57,7 @@ def addmany_sql(message):
                     invalid_counter = True
 
                 else:
-                    #check if the same food (with same expiry date already exists in database)
+                    # check if the same food (with same expiry date already exists in database)
                     cur = conn.cursor()
                     checking_query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE food.foodName = %s AND food.expiryDate = %s AND userID = %s"
                     checking_values = (food_name, expiry_date, message.from_user.id)
@@ -81,7 +81,7 @@ def addmany_sql(message):
 
                     else:
                         existing_foodID = data[0][0]
-                        #existing record of food with same expiry date, just add
+                        # existing record of food with same expiry date, just add
                         total_servings = int(data[0][2]) + int(servings)
                         cur = conn.cursor()
                         add = f"UPDATE food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
