@@ -14,3 +14,13 @@ def validDate(date):
         if len(year) != 4:
             isValidDate = False
     return isValidDate
+
+
+#change timezone
+import pytz
+tz = pytz.timezone('Singapore')
+
+#getting today's date
+def get_today():
+    sg = datetime.now(tz)
+    return sg.date()
