@@ -1,5 +1,5 @@
 # connect to database
-result = urlparse("DATABASE URL")
+result = urlparse("DATABASE_URL")
 username = result.username
 password = result.password
 database = result.path[1:]
