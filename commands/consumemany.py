@@ -24,10 +24,8 @@ def consumemany_sql(message):
         
         invalid_input_msg = "Invalid input(s)! These are not removed from your food stock:\n\n"
         invalid_counter = False
-        
-        #getting today's date
-        sg = datetime.now(tz)
-        today = sg.date()
+
+        today = get_today()
         
         total_servings_consumed = 0
         points_given = 0
@@ -186,4 +184,5 @@ def consumemany_sql(message):
             
         if invalid_counter:
             reply = bot.send_message(message.from_user.id, invalid_input_msg + "\nPlease try again!")
-            bot.register_next_step_handler(reply, consumemany_sql)  
+            bot.register_next_step_handler(reply, consumemany_sql)    
+    
