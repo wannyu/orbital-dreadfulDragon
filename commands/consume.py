@@ -2,6 +2,7 @@ import functions
 
 """
 /consume command in bot 
+for user to consume food from foodstock
 """
 @bot.message_handler(commands=['consume'])
 def consume(message):
