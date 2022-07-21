@@ -1,10 +1,22 @@
+import functions
+
+"""
+/addmany command in bot 
+for user to add multiple food items to foodstock
+"""
 @bot.message_handler(commands=['addmany'])
 def addmany(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. Insert a line break after each food. \nEg: \nbell pepper 2 19/11/2022\nbanana 5 18/7/2022\napple 2 20/8/2022')
     bot.register_next_step_handler(reply, addmany_sql)
 
+    
+"""
+helper function to /addmany command
+takes in message sent from user, check if the message is valid to add food items
+valid food items (with valid name, valid servings, valid expiry date) will be added to database
+invalid food items will not be added, will prompt user to reenter (with appropriate error messages)
+"""
 def addmany_sql(message):
-    #list = message.text.split("\n")
     if message.text == "/cancel":
         bot.send_message(message.from_user.id, "You exited /addmany command.")
     else:
@@ -36,9 +48,7 @@ def addmany_sql(message):
                 expiry_date = terms[-1]
                 expiry_date = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date()
 
-                #getting today's date
-                sg = datetime.now(tz)
-                today = sg.date()
+                today = get_today()
                 if (expiry_date - today).days < 0: #expiry date earlier than today
                     invalid_input_msg += "(" + str(k) + ")" + ': Invalid date! Date cannot be earlier than today.\n'
                     invalid_counter = True
@@ -48,7 +58,7 @@ def addmany_sql(message):
                     invalid_counter = True
 
                 else:
-                    #check if the same food (with same expiry date already exists in database)
+                    # check if the same food (with same expiry date already exists in database)
                     cur = conn.cursor()
                     checking_query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE food.foodName = %s AND food.expiryDate = %s AND userID = %s"
                     checking_values = (food_name, expiry_date, message.from_user.id)
@@ -72,14 +82,14 @@ def addmany_sql(message):
 
                     else:
                         existing_foodID = data[0][0]
-                        #existing record of food with same expiry date, just add
+                        # existing record of food with same expiry date, just add
                         total_servings = int(data[0][2]) + int(servings)
                         cur = conn.cursor()
                         add = f"UPDATE food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
                         cur.execute(add)
                         conn.commit()
 
-                    if servings == "1":
+                    if servings == 1:
                         expiry_date = expiry_date.strftime('%d/%m/%Y')
                         confirmation_msg += f"{food_name} ({servings} serving) expires {expiry_date} \n"
                     else:

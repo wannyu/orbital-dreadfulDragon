@@ -1,3 +1,8 @@
+from telebot import types
+
+"""
+creating custom keyboard that only have 4 buttons
+"""
 def rem_markup():
     markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
     option1 = types.KeyboardButton('1')
@@ -7,6 +12,10 @@ def rem_markup():
     markup.add(option1, option2, option3, option4)
     return markup
 
+"""
+/change_reminder command in bot 
+for user to change soon-to-be expired food reminders
+"""
 @bot.message_handler(commands=['change_reminder'])
 def change_reminder(message):
     data = [message.from_user.id]
@@ -19,6 +28,10 @@ def change_reminder(message):
     reply = bot.send_message(message.from_user.id, f"Only the frequency of reminders for soon-to-be expired food can be changed. You are currently recieving reminders {result} time(s) per day. Please select your desired frequency.", reply_markup=rem_markup())
     bot.register_next_step_handler(reply, set_rem_freq)
 
+"""
+helper function for /change_reminder command 
+takes in message sent by user to determine what frequency to change to
+"""
 def set_rem_freq(message):    
     if message.text == "/cancel":
         bot.send_message(message.from_user.id, "You exited /change_reminder command.")
@@ -53,3 +66,4 @@ def set_rem_freq(message):
     else:
         reply = bot.send_message(message.from_user.id, "Please select one of the buttons.")
         bot.register_next_step_handler(reply, set_rem_freq)     
+        

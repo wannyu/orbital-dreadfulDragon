@@ -1,29 +1,13 @@
-def cus_send_message(id, text):
-     try:
-        bot.send_message(id, text)
-     except Exception as e:
-        print(e)
+import functions
+import threading_functions
 
-def cansend(db_reminders_result, hour):
-    # determine if message should be sent, returns boolean
-    index = (hour // 3) + 1
-    return db_reminders_result[0][index] == 0
 
-def canandshouldsend(db_reminders_result, hour, rem_freq):
-    # determine if message should be sent based on user's personal reminder freq, returns boolean
-    timings_list = []
-    if rem_freq == 1:
-        timings_list = [0]
-    elif rem_freq == 2:
-        timings_list = [0, 12]
-    elif rem_freq == 4:
-        timings_list = [0, 6, 12, 18]
-    elif rem_freq == 8:
-        timings_list = [0, 3, 6, 9, 12, 15, 18, 21]
-    return cansend(db_reminders_result, hour) and (hour in timings_list)
-        
+"""
+Main threading function that is used to process data and send out messages to users on a regular basis
+"""
 def threading_func():
     while True:
+        # storing all users' userid in a list 
         cur = conn.cursor()
         cur.execute("SELECT userID FROM users;")
         result = cur.fetchall()
@@ -31,11 +15,10 @@ def threading_func():
         if result:
             for tupleid in result:
                 ids = ids + [tupleid[0]]
+                    
+        today = get_today()
 
-        #getting today's date
-        sg = datetime.now(tz)
-        today = sg.date()
-
+        # connecting to reminders table
         cur = conn.cursor()
         values = (today,)
         check_query = "SELECT * FROM reminders WHERE reminders.date = %s;"
@@ -43,6 +26,7 @@ def threading_func():
         db_reminders_result = cur.fetchall()
 
         if len(db_reminders_result) == 0:
+            # add into database if today doesnt exist
             cur = conn.cursor()
             values = (today, 0, 0, 0, 0, 0, 0, 0, 0)
             insert_query = "INSERT INTO reminders VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);"
@@ -57,17 +41,16 @@ def threading_func():
          
 
     
-        for id in ids:
+        for id in ids: # iterate through all users
             
             ##### weekly leaderboards #####
-            #sends on sun, mon and thur 12am
+            # sends on sun 12am (mon and thur for peer evaluation) 
             daytoday = today.strftime('%A')
             if (daytoday == "Sunday" or daytoday == "Monday" or daytoday == "Thursday") and sg.hour == 0 and cansend(db_reminders_result, 0):
                 points_query = "SELECT userID, points, username FROM users ORDER BY points DESC"
                 cur = conn.cursor()
                 cur.execute(points_query)
                 result = cur.fetchall()
-                #we display top 3 users?
                 reply = "The leaderboard for this week:\n"
 
                 try:
@@ -96,17 +79,14 @@ def threading_func():
             cur.execute(query, values)
             rem_freq = cur.fetchall()[0][0]
 
-            if (sg.hour == 0 or sg.hour == 3 or sg.hour == 6 or sg.hour == 9 or sg.hour == 12 or sg.hour == 15 or sg.hour == 18 or sg.hour == 21) and canandshouldsend(db_reminders_result, sg.hour, rem_freq):
+            if (sg.hour == 0 or sg.hour == 3 or sg.hour == 6 or sg.hour == 9 or sg.hour == 12 or sg.hour == 15 or sg.hour == 18 or sg.hour == 21) \
+            and canandshouldsend(db_reminders_result, sg.hour, rem_freq):
                 data = [id]
                 cur = conn.cursor()
                 expiry_query = "SELECT * FROM food WHERE userID = %s ORDER BY foodName"
                 cur.execute(expiry_query, data)
                 result = cur.fetchall()
                 conn.commit()
-
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
 
                 expiring_today = 0
                 expiring_oneday = 0
@@ -150,8 +130,9 @@ def threading_func():
 
 
             ##### send purchase limit message #####
-            #trying 6h intervals (roughly 12am, 6am, 12pm, 6pm)
-            if (sg.hour == 0 and cansend(db_reminders_result, 0)) or (sg.hour == 6 and cansend(db_reminders_result, 6)) or (sg.hour == 12 and cansend(db_reminders_result, 12)) or (sg.hour == 18 and cansend(db_reminders_result, 18)):
+            # 6h intervals (12am, 6am, 12pm, 6pm)
+            if (sg.hour == 0 and cansend(db_reminders_result, 0)) or (sg.hour == 6 and cansend(db_reminders_result, 6)) \
+            or (sg.hour == 12 and cansend(db_reminders_result, 12)) or (sg.hour == 18 and cansend(db_reminders_result, 18)):
                 servings_div_by_days_left = 0
                 data = [id]
                 cur = conn.cursor()
@@ -159,16 +140,12 @@ def threading_func():
                 cur.execute(food_query, data)
                 result = cur.fetchall()
 
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
-
                 for i in result:
                     expiry_date = dt.datetime.strptime(str(i[3]), "%Y-%m-%d").date()
                     days_left = (expiry_date - today).days
                     num_servings = int(i[2])
 
-                    #if the food expires today, then change it to 1 (1 day left to eat)
+                    # if the food expires today, change it to 1 (1 day left to eat)
                     if days_left == 0:
                         days_left = 1
                     servings_div_by_days_left += num_servings / days_left
@@ -190,18 +167,14 @@ def threading_func():
 
             ##### update weekly consumption #####
             data = [id]
-
-            #getting today's date
-            sg = datetime.now(tz)
-            today = sg.date()
-
             cur = conn.cursor()
             reset_date_query = "SELECT startDate FROM users WHERE userID = %s"
             cur.execute(reset_date_query, data)
             result = cur.fetchall()
             stored_date = result[0][0]
             
-            if (today - stored_date).days % 7 == 0 and (today - stored_date).days != 0: #7 days interval since it is a weekly update and not == start date
+            if (today - stored_date).days % 7 == 0 and (today - stored_date).days != 0: 
+                # 7 days interval since it is a weekly update and not == start date
                 cur = conn.cursor()
                 weekly_servings_consumed_query = "SELECT weeklyServings FROM users WHERE userID = %s"
                 cur.execute(weekly_servings_consumed_query, data)
@@ -217,13 +190,13 @@ def threading_func():
                 user_limit = weekly_servings_consumed / num_hh_members / 7
                 rounded_value = math.ceil(user_limit)
                 
-                #update new limit for this user
+                # update new limit for this user
                 if rounded_value > 0:
                     cur = conn.cursor()
                     cur.execute(f"UPDATE users SET servingLimit = {rounded_value} WHERE userID = {id};")
                     conn.commit()
 
-                #make serving count to be back to 0
+                # make serving count to be back to 0
                 cur = conn.cursor()
                 cur.execute(f"UPDATE users SET weeklyServings = 0 WHERE userID = {id};")
                 conn.commit()
@@ -231,13 +204,9 @@ def threading_func():
        
        
             ##### checking for expired food #####
-            #daily at 12am
+            # daily at 12am
             if sg.hour == 0 and cansend(db_reminders_result, 0):
                 curr_id = [id]
-
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
 
                 cur = conn.cursor()
                 query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s"
@@ -253,13 +222,13 @@ def threading_func():
                         expiry_date = expiry_date.strftime('%d/%m/%Y')
                         points_to_deduct = servings
 
-                        #deduct points
+                        # deduct points
                         cur = conn.cursor()
                         cur.execute(f"SELECT points FROM users WHERE userID = {id}")
                         result = cur.fetchall()
                         updated_points = int(result[0][0]) - points_to_deduct
 
-                        if updated_points < 0: #if points go negative
+                        if updated_points < 0: # if points go negative
                             points_to_deduct = int(result[0][0])
                             updated_points = 0
 
@@ -267,62 +236,39 @@ def threading_func():
                         cur.execute(f"UPDATE users SET points = {updated_points} WHERE userID = {id};")
                         conn.commit()
 
-                        cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} points were deducted.")
+                        if points_to_deduct == 1:
+                            cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} point was deducted.")
+                        else:
+                            cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} points were deducted.")
                         cur.execute(f"DELETE FROM food WHERE foodID = {food_id}")
                         conn.commit()
                         
                         
-        ##UPDATE REMINDERS TABLE TO SET CURRENT HOUR VALUE TO 1
-        if sg.hour == 0:
+        ## update reminders table to set current hour value to 1
+        if (sg.hour % 3 == 0) and (sg.hour <= 21):
             cur = conn.cursor()
             values = (1, today)
-            query = "UPDATE reminders SET zero = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 3:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET three = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 6:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET six = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 9:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET nine = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 12:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET twelve = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 15:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET fifteen = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 18:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET eighteen = %s WHERE date = %s;"
-            cur.execute(query, values)
-            conn.commit()
-        elif sg.hour == 21:
-            cur = conn.cursor()
-            values = (1, today)
-            query = "UPDATE reminders SET twentyone = %s WHERE date = %s;"
+
+            if sg.hour == 0:
+                query = "UPDATE reminders SET zero = %s WHERE date = %s;"
+            elif sg.hour == 3:
+                query = "UPDATE reminders SET three = %s WHERE date = %s;"
+            elif sg.hour == 6:
+                query = "UPDATE reminders SET six = %s WHERE date = %s;"
+            elif sg.hour == 9:
+                query = "UPDATE reminders SET nine = %s WHERE date = %s;"
+            elif sg.hour == 12:
+                query = "UPDATE reminders SET twelve = %s WHERE date = %s;"
+            elif sg.hour == 15:
+                query = "UPDATE reminders SET fifteen = %s WHERE date = %s;"
+            elif sg.hour == 18:
+                query = "UPDATE reminders SET eighteen = %s WHERE date = %s;"
+            elif sg.hour == 21:
+                query = "UPDATE reminders SET twentyone = %s WHERE date = %s;"
+
             cur.execute(query, values)
             conn.commit()
             
-        sleep(1200)#every 20 min
-        #sleep(3600) #1h
+        sleep(600) # every 10 min
+
 worker = threading.Thread(target=threading_func, args=())
-worker.start()

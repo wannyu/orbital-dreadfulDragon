@@ -1,3 +1,9 @@
+import functions
+
+"""
+/consumemany command in bot 
+for user to consume multiple food items from foodstock
+"""
 @bot.message_handler(commands=['consumemany'])
 def consumemany(message):
     data = [message.from_user.id]
@@ -6,14 +12,19 @@ def consumemany(message):
     cur.execute(query, data)
     result = cur.fetchall()
     
-    #user doesnt have anything in their list
+    # user doesnt have anything in their list, dont let them consume
     if len(result) == 0:
         reply = bot.send_message(message.from_user.id, 'Sorry, you do not have any food in your list. Use /add to add some food before comsuming them!')
     else:
         reply = bot.send_message(message.from_user.id, 'Please state the food name and servings consumed. Insert a line break after each food.\nEg:\nbell pepper 1\nbanana 2\napple 5')
         bot.register_next_step_handler(reply, consumemany_sql)     
         
-
+"""
+helper function for /consumemany command 
+takes in message sent from user, check if the message is valid to consume food item
+valid food items (with valid name, valid servings) will be removed from database
+invalid food items will not be removed, will prompt user to reenter (with appropriate error messages)
+"""
 def consumemany_sql(message):
     if message.text == "/cancel":
         bot.send_message(message.from_user.id, "You exited /consumemany command.")
@@ -24,10 +35,8 @@ def consumemany_sql(message):
         
         invalid_input_msg = "Invalid input(s)! These are not removed from your food stock:\n\n"
         invalid_counter = False
-        
-        #getting today's date
-        sg = datetime.now(tz)
-        today = sg.date()
+
+        today = get_today()
         
         total_servings_consumed = 0
         points_given = 0
@@ -55,13 +64,10 @@ def consumemany_sql(message):
                 food = cur.fetchall()
 
                 if len(food) == 0: # the input food by user isnt in the foodstock
-                    #servings_consumed = 0 #set this to zero so it wouldnt add this serving to weekly serving consumption
                     invalid_input_msg += "(" + str(k) + ")" + ': Invalid input! You do not have this in your food stock.\n'
                     invalid_counter = True
 
-
                 elif servings_consumed <= 0:
-                    #servings_consumed = 0 #set this to zero so it wouldnt add this serving to weekly serving consumption
                     invalid_input_msg += "(" + str(k) + ")" + ': Invalid serving value! Value should at least be 1.\n'
                     invalid_counter = True
 
@@ -74,9 +80,9 @@ def consumemany_sql(message):
                         invalid_input_msg += "(" + str(k) + ")" + ': Your serving input is more than what you have in your food stock!\n'
                         invalid_counter = True
 
-                    else: #this whole else segment involves consuming food (and update database)
+                    else: # this whole else segment involves consuming food (and update database)
                         if len(food) == 1:
-                            #theres only 1 food with that name, juz update the servings of the only row
+                            # theres only 1 food with that name, juz update the servings of the only row
                             earliest_foodID = food[0][0]
                             servings_available = food[0][1]
                             expiry_date = food[0][2]
@@ -87,26 +93,26 @@ def consumemany_sql(message):
 
 
                             if servings_consumed == servings_available:
-                                #delete from database
+                                # delete from database
                                 cur = conn.cursor()
                                 cur.execute(f"DELETE FROM food WHERE foodID = {earliest_foodID} AND userID = {message.from_user.id}")
                                 conn.commit()
 
                             else:
-                                #update database
+                                # update database
                                 servings_left = servings_available - servings_consumed
                                 cur = conn.cursor()
                                 cur.execute(f"UPDATE food SET servings = {servings_left} WHERE foodID = {earliest_foodID} AND userID = {message.from_user.id}")
                                 conn.commit()     
 
-                        else: #len(food) > 1
-                            #sum all servings with diff expiry dates, then start deducting servings from earliest expiry
+                        else: # len(food) > 1
+                            # sum all servings with diff expiry dates, then start deducting servings from earliest expiry
                             servings_sum = 0
                             for foodrow in food:
                                 servings_sum += foodrow[1]
 
                             if servings_consumed == servings_sum:
-                                #all the food across diff expiry dates are consumed 
+                                # all the food across diff expiry dates are consumed 
                                 for foodrow in food:
                                     foodid_to_delete = foodrow[0]
                                     cur = conn.cursor()
@@ -119,13 +125,12 @@ def consumemany_sql(message):
                                         days_left = 1
                                     points_given += days_left * foodrow[1]
 
-
                             else:
-                                #check which rows need to deleted/updated based on how many servings are consumed (according to order of expiry)
+                                # check which rows need to deleted/updated based on how many servings are consumed (according to order of expiry)
                                 servings_consumed_counter = servings_consumed #use counter as servings_consumed is required later on
                                 for foodrow in food:
                                     if servings_consumed_counter - foodrow[1] >= 0:
-                                        #delete this row 
+                                        # delete this row 
                                         foodid_to_delete = foodrow[0]
                                         cur = conn.cursor()
                                         cur.execute(f"DELETE FROM food WHERE foodID = {foodid_to_delete} AND userID = {message.from_user.id}")
@@ -137,7 +142,7 @@ def consumemany_sql(message):
                                         points_given += days_left * foodrow[1]
 
                                     elif servings_consumed_counter > 0:
-                                        #update this row
+                                        # update this row
                                         foodid_to_update = foodrow[0]
                                         cur = conn.cursor()
                                         update_serving_value = foodrow[1] - servings_consumed_counter
@@ -164,7 +169,7 @@ def consumemany_sql(message):
             confirmation_msg += "You are awarded " + str(points_given) + " point(s) for consuming them before their expiry. Good job!"
             bot.send_message(message.from_user.id, confirmation_msg)
             
-            ###update User SQL (servings consumed for the week)
+            ### update User SQL (servings consumed for the week)
             cur = conn.cursor()
             cur.execute(f"SELECT weeklyServings FROM users WHERE userID = {message.from_user.id}")
             result = cur.fetchall()
@@ -174,7 +179,7 @@ def consumemany_sql(message):
             cur.execute(f"UPDATE users SET weeklyServings = {updated_servings} WHERE userID = {message.from_user.id};")
             conn.commit()
 
-            ###award points 
+            ### award points 
             cur = conn.cursor()
             cur.execute(f"SELECT points FROM users WHERE userID = {message.from_user.id}")
             result = cur.fetchall()
@@ -186,4 +191,5 @@ def consumemany_sql(message):
             
         if invalid_counter:
             reply = bot.send_message(message.from_user.id, invalid_input_msg + "\nPlease try again!")
-            bot.register_next_step_handler(reply, consumemany_sql)  
+            bot.register_next_step_handler(reply, consumemany_sql)    
+    
