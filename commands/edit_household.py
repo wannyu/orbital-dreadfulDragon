@@ -1,3 +1,6 @@
+"""
+/edit_household_members command in bot 
+"""
 @bot.message_handler(commands=['edit_household_members'])
 def edit_household_members(message):
     id = [message.from_user.id]
@@ -12,10 +15,16 @@ def edit_household_members(message):
         reply = bot.send_message(message.from_user.id, f'You currently have {result} people in your household. Please state the updated number of people in your household (eg. 1, 2, 3 etc).')
     bot.register_next_step_handler(reply, update_nhousehold)
 
+"""
+helper function for /edit_household_members command
+takes in message from user, determine if it is valid
+if valid, update database accordingly
+if invalid, will prompt user to reenter a valid number
+"""
 def update_nhousehold(message):
     userID = message.from_user.id
 
-    try:
+    try: #checking if its integer
         int(message.text)
     except:
         reply = bot.send_message(message.from_user.id, "Please enter a valid number.")
