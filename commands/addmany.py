@@ -1,12 +1,21 @@
 import functions
 
+"""
+/addmany command in bot 
+"""
 @bot.message_handler(commands=['addmany'])
 def addmany(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. Insert a line break after each food. \nEg: \nbell pepper 2 19/11/2022\nbanana 5 18/7/2022\napple 2 20/8/2022')
     bot.register_next_step_handler(reply, addmany_sql)
 
+    
+"""
+helper function to /addmany command
+takes in message sent from user, check if the message is valid to add food items
+valid food items (with valid name, valid servings, valid expiry date) will be added to database
+invalid food items will not be added, will prompt user to reenter (with appropriate error messages)
+"""
 def addmany_sql(message):
-    #list = message.text.split("\n")
     if message.text == "/cancel":
         bot.send_message(message.from_user.id, "You exited /addmany command.")
     else:
