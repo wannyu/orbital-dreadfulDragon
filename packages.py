@@ -16,6 +16,5 @@ from datetime import date
 from datetime import datetime
 from time import sleep
 import pytz
-tz = pytz.timezone('Singapore') #change timezone
 
 import math
