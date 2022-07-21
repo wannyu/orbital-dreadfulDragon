@@ -1,5 +1,6 @@
 """
 /list command in bot 
+get a list of all the food a user has
 """
 @bot.message_handler(commands=['list'])
 def list(message):
