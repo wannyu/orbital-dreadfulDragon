@@ -9,3 +9,4 @@ CREATE TABLE reminders (
     eighteen INT NOT NULL,
     twentyone INT NOT NULL
 );
+
