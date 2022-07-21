@@ -1,5 +1,8 @@
 import functions
 
+"""
+/add command in bot 
+"""
 @bot.message_handler(commands=['add'])
 def add(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. \nEg: bell pepper 2 19/11/2022')
