@@ -1,3 +1,5 @@
+from telebot import types
+
 def rem_markup():
     markup = types.ReplyKeyboardMarkup(row_width=1, one_time_keyboard=True)
     option1 = types.KeyboardButton('1')
@@ -53,3 +55,4 @@ def set_rem_freq(message):
     else:
         reply = bot.send_message(message.from_user.id, "Please select one of the buttons.")
         bot.register_next_step_handler(reply, set_rem_freq)     
+        
