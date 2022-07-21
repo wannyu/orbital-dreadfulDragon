@@ -1,27 +1,6 @@
-def cus_send_message(id, text):
-     try:
-        bot.send_message(id, text)
-     except Exception as e:
-        print(e)
+import functions
+import threading_functions
 
-def cansend(db_reminders_result, hour):
-    # determine if message should be sent, returns boolean
-    index = (hour // 3) + 1
-    return db_reminders_result[0][index] == 0
-
-def canandshouldsend(db_reminders_result, hour, rem_freq):
-    # determine if message should be sent based on user's personal reminder freq, returns boolean
-    timings_list = []
-    if rem_freq == 1:
-        timings_list = [0]
-    elif rem_freq == 2:
-        timings_list = [0, 12]
-    elif rem_freq == 4:
-        timings_list = [0, 6, 12, 18]
-    elif rem_freq == 8:
-        timings_list = [0, 3, 6, 9, 12, 15, 18, 21]
-    return cansend(db_reminders_result, hour) and (hour in timings_list)
-        
 def threading_func():
     while True:
         cur = conn.cursor()
@@ -31,10 +10,8 @@ def threading_func():
         if result:
             for tupleid in result:
                 ids = ids + [tupleid[0]]
-
-        #getting today's date
-        sg = datetime.now(tz)
-        today = sg.date()
+                    
+        today = get_today()
 
         cur = conn.cursor()
         values = (today,)
@@ -104,10 +81,6 @@ def threading_func():
                 result = cur.fetchall()
                 conn.commit()
 
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
-
                 expiring_today = 0
                 expiring_oneday = 0
                 expiring_threedays = 0
@@ -158,10 +131,6 @@ def threading_func():
                 food_query = "SELECT * fROM Food WHERE userID = %s"
                 cur.execute(food_query, data)
                 result = cur.fetchall()
-
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
 
                 for i in result:
                     expiry_date = dt.datetime.strptime(str(i[3]), "%Y-%m-%d").date()
@@ -235,10 +204,6 @@ def threading_func():
             if sg.hour == 0 and cansend(db_reminders_result, 0):
                 curr_id = [id]
 
-                #getting today's date
-                #sg = datetime.now(tz)
-                #today = sg.date()
-
                 cur = conn.cursor()
                 query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE userID = %s"
                 cur.execute(query, curr_id)
@@ -267,7 +232,10 @@ def threading_func():
                         cur.execute(f"UPDATE users SET points = {updated_points} WHERE userID = {id};")
                         conn.commit()
 
-                        cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} points were deducted.")
+                        if points_to_deduct == 1:
+                            cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} point was deducted.")
+                        else:
+                            cus_send_message(id, f"Oh no! It seems like you forgot to consume {servings} serving(s) of {food_name} which expired on {expiry_date}. It has been removed from your food stock and {points_to_deduct} points were deducted.")
                         cur.execute(f"DELETE FROM food WHERE foodID = {food_id}")
                         conn.commit()
                         
@@ -322,7 +290,6 @@ def threading_func():
             cur.execute(query, values)
             conn.commit()
             
-        sleep(1200)#every 20 min
-        #sleep(3600) #1h
+        sleep(600)#every 10 min
+
 worker = threading.Thread(target=threading_func, args=())
-worker.start()
