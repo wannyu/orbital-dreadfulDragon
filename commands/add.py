@@ -8,6 +8,12 @@ def add(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. \nEg: bell pepper 2 19/11/2022')
     bot.register_next_step_handler(reply, add_sql)
 
+"""
+helper function to /add command
+takes in message sent from user, check if the message is valid to add food item
+if food item is valid (valid name, valid servings, valid expiry date), it will be added to database
+else it will not be added, will prompt user to reenter (with appropriate error messages)
+"""
 def add_sql(message):
     cur = conn.cursor()
     terms = message.text.split(" ")
@@ -40,7 +46,7 @@ def add_sql(message):
             bot.register_next_step_handler(reply, add_sql)
         
         else:
-            #check if the same food (with same expiry date already exists in database)
+            # check if the same food (with same expiry date already exists in database)
             cur = conn.cursor()
             checking_query = "SELECT foodID, foodName, servings, expiryDate FROM food WHERE food.foodName = %s AND food.expiryDate = %s AND userID = %s"
             checking_values = (food_name, expiry_date, message.from_user.id)
@@ -63,7 +69,7 @@ def add_sql(message):
 
             else:
                 existing_foodID = data[0][0]
-                #existing record of food with same expiry date, just add
+                # existing record of food with same expiry date, just add
                 total_servings = int(data[0][2]) + int(servings)
                 cur = conn.cursor()
                 add = f"UPDATE food SET servings = {total_servings} WHERE foodID = {existing_foodID}"
