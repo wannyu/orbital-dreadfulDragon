@@ -1,3 +1,5 @@
+import functions
+
 @bot.message_handler(commands=['add'])
 def add(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. \nEg: bell pepper 2 19/11/2022')
@@ -25,9 +27,7 @@ def add_sql(message):
         expiry_date = terms[-1]
         expiry_date = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date()
 
-        #getting today's date
-        sg = datetime.now(tz)
-        today = sg.date()
+        today = get_today()
         if (expiry_date - today).days < 0: #expiry date earlier than today
             reply = bot.send_message(message.from_user.id, 'Invalid date! Date cannot be earlier than today. Please try again!')
             bot.register_next_step_handler(reply, add_sql)
@@ -68,7 +68,7 @@ def add_sql(message):
                 conn.commit()
 
             reply = "This is added to your food stock: \n"
-            if servings == "1":
+            if servings == 1:
                 expiry_date = expiry_date.strftime('%d/%m/%Y')
                 reply += f"{food_name} ({servings} serving) expires {expiry_date} \n"
             else:
@@ -79,4 +79,3 @@ def add_sql(message):
     else:
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2 15/10/2022"')
         bot.register_next_step_handler(reply, add_sql)
-
