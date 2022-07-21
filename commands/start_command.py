@@ -63,4 +63,5 @@ def nhousehold(message):
             if household_size == 1:
                 bot.send_message(message.from_user.id, f"There is {message.text} person in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
             elif household_size > 1:
-                    
+                bot.send_message(message.from_user.id, f"There are {message.text} people in your household. You can start logging in your food. \nType /help to get guidance on how to use the bot.")
+
