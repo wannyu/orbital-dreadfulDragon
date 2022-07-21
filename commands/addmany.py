@@ -1,3 +1,5 @@
+import functions
+
 @bot.message_handler(commands=['addmany'])
 def addmany(message):
     reply = bot.send_message(message.from_user.id, 'Please state the food name, servings and expiry date. Insert a line break after each food. \nEg: \nbell pepper 2 19/11/2022\nbanana 5 18/7/2022\napple 2 20/8/2022')
@@ -36,9 +38,7 @@ def addmany_sql(message):
                 expiry_date = terms[-1]
                 expiry_date = dt.datetime.strptime(expiry_date, "%d/%m/%Y").date()
 
-                #getting today's date
-                sg = datetime.now(tz)
-                today = sg.date()
+                today = get_today()
                 if (expiry_date - today).days < 0: #expiry date earlier than today
                     invalid_input_msg += "(" + str(k) + ")" + ': Invalid date! Date cannot be earlier than today.\n'
                     invalid_counter = True
@@ -79,7 +79,7 @@ def addmany_sql(message):
                         cur.execute(add)
                         conn.commit()
 
-                    if servings == "1":
+                    if servings == 1:
                         expiry_date = expiry_date.strftime('%d/%m/%Y')
                         confirmation_msg += f"{food_name} ({servings} serving) expires {expiry_date} \n"
                     else:
