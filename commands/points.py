@@ -1,3 +1,7 @@
+"""
+/points command in bot
+query how many points a user has
+"""
 @bot.message_handler(commands=['points'])
 def points(message):
     cur = conn.cursor()
