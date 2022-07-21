@@ -2,6 +2,7 @@ import functions
 
 """
 /add command in bot 
+for user to add food to foodstock
 """
 @bot.message_handler(commands=['add'])
 def add(message):
