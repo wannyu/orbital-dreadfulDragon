@@ -1,4 +1,4 @@
-CREATE TABLE user (
+CREATE TABLE users (
     userID BIGINT PRIMARY KEY,
     household INT NOT NULL,
     points BIGINT NOT NULL,
