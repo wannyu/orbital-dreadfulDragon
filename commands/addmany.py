@@ -2,6 +2,7 @@ import functions
 
 """
 /addmany command in bot 
+for user to add multiple food items to foodstock
 """
 @bot.message_handler(commands=['addmany'])
 def addmany(message):
