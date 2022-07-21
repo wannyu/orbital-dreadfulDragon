@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE user (
     userID BIGINT PRIMARY KEY,
     household INT NOT NULL,
     points BIGINT NOT NULL,
@@ -8,3 +8,4 @@ CREATE TABLE users (
     username VARCHAR(1000) NOT NULL, 
     reminderFreq INT NOT NULL
 );
+ 
