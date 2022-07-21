@@ -6,3 +6,4 @@ CREATE TABLE food (
     userID BIGINT NOT NULL,
     FOREIGN KEY (userID) REFERENCES users(userID)
 );
+
