@@ -14,6 +14,7 @@ def rem_markup():
 
 """
 /change_reminder command in bot 
+for user to change soon-to-be expired food reminders
 """
 @bot.message_handler(commands=['change_reminder'])
 def change_reminder(message):
