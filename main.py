@@ -1,4 +1,4 @@
-#connect to database
+# connect to database
 result = urlparse("DATABASE URL")
 username = result.username
 password = result.password
@@ -14,13 +14,14 @@ conn = psycopg2.connect(
     port = port
 )
 
-#connect to telebot
+# connect to telegram bot
 bot = telebot.TeleBot("TOKEN", parse_mode=None)
 
 import packages
 import commands
 
 import threading
+# start main threading function
 worker.start()
 
 bot.infinity_polling(timeout=10, long_polling_timeout = 5)
