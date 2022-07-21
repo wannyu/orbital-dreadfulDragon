@@ -1,3 +1,5 @@
+import functions
+
 @bot.message_handler(commands=['consumemany'])
 def consumemany(message):
     data = [message.from_user.id]
