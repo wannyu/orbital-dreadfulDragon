@@ -46,12 +46,10 @@ def consume_sql(message):
         food = cur.fetchall()
 
         if len(food) == 0: # the input food by user isnt in the foodstock
-            #servings_consumed = 0 #set this to zero so it wouldnt add this serving to weekly serving consumption
             reply = bot.send_message(message.from_user.id, 'Invalid input! You do not have this in your food stock. Please try again!')
             bot.register_next_step_handler(reply, consume_sql)
    
         elif servings_consumed <= 0:
-            #servings_consumed = 0 #set this to zero so it wouldnt add this serving to weekly serving consumption
             reply = bot.send_message(message.from_user.id, 'Invalid serving value! Value should at least be 1. Please try again!')
             bot.register_next_step_handler(reply, consume_sql)
             
@@ -167,3 +165,4 @@ def consume_sql(message):
     else:
         reply = bot.send_message(message.from_user.id, 'Invalid input! Please follow the specified format. Eg: "Apple 2"')
         bot.register_next_step_handler(reply, consume_sql)
+        
