@@ -17,8 +17,10 @@ conn = psycopg2.connect(
 #connect to telebot
 bot = telebot.TeleBot("TOKEN", parse_mode=None)
 
+import packages
+import commands
 
+import threading
+worker.start()
 
-
-#at the end of code
 bot.infinity_polling(timeout=10, long_polling_timeout = 5)
