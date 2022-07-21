@@ -1,3 +1,5 @@
+import functions
+
 @bot.message_handler(commands=['consume'])
 def consume(message):
     data = [message.from_user.id]
@@ -19,9 +21,7 @@ def consume_sql(message):
     terms = message.text.split(" ")
     userID = message.from_user.id
     
-    #getting today's date
-    sg = datetime.now(tz)
-    today = sg.date()
+    today = get_today()
 
     isString = 0
     for j in range(len(terms) - 1):
